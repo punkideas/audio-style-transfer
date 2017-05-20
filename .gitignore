@@ -2,5 +2,7 @@
 env/
 *.wav
 *.mp4
+*.pyc
+*.pyo
 
 

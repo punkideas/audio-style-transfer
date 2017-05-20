@@ -13,7 +13,7 @@ def get_tf_shape_as_list(x, mix_python=True):
     return out
 
 def lstm_layer(x, hidden_size, seq_lengths, initial_state=None, seed=123123):
-    cell = tf.contrib.rnn.LSTMCell(hidden_size, initializer= \
+    cell = tf.contrib.rnn.LSTMCell(hidden_size, reuse=tf.get_variable_scope().reuse, initializer= \
                                    tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
     outputs, final_state = tf.nn.dynamic_rnn(cell, x, sequence_length=seq_lengths,
                       initial_state=initial_state, dtype=tf.float32)
@@ -24,7 +24,7 @@ def self_feeding_lstm_layer(max_output_sequence_length, initial_c_state, initial
     An LSTM that will use the previous output as the current input
     """
     tf_batch_size, hidden_size = get_tf_shape_as_list(initial_c_state)
-    cell = tf.contrib.rnn.LSTMCell(hidden_size, initializer= \
+    cell = tf.contrib.rnn.LSTMCell(hidden_size, reuse=tf.get_variable_scope().reuse, initializer= \
                                    tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
     index = tf.constant(0)
     outputs = tf.zeros((0, tf_batch_size, hidden_size))
