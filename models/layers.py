@@ -67,21 +67,26 @@ def self_feeding_lstm_layer(max_output_sequence_length, initial_c_state, initial
                   shape_invariants=shape_invariants, parallel_iterations=1)
     return tf.transpose(outputs, (1, 0, 2))
     
-def conv1d_transpose(x, output_shape, filters_out, window_size, stride, padding, name=None, seed=123123):
+def conv1d_transpose(x, output_shape, filters_out, window_size, stride, padding, use_bias = False, name=None, seed=123123):
     """
     output_shape must be a python list, and the last dimension must be known
     No bias, 1d version of tf.nn.conv2d_transpose
     """
     with tf.variable_scope(name):
-	x = tf.expand_dims(x, axis=1)
-	B, W, C = output_shape
-	output_shape = tf.stack((B, 1, W, C))
-	filter = tf.get_variable("conv1d_filter", shape=(1, window_size, filters_out, x.get_shape()[-1]),
-				dtype=tf.float32, 
-				initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
-	x = tf.nn.conv2d_transpose(x, filter, output_shape=output_shape,
-	strides = (1, 1, stride, 1), padding=padding)
-	return tf.squeeze(x, axis=[1])
+        x = tf.expand_dims(x, axis=1)
+        B, W, C = output_shape
+        output_shape = tf.stack((B, 1, W, C))
+        filter = tf.get_variable("conv1d_filter", shape=(1, window_size, filters_out, x.get_shape()[-1]),
+                    dtype=tf.float32, 
+                    initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
+        x = tf.nn.conv2d_transpose(x, filter, output_shape=output_shape,
+        strides = (1, 1, stride, 1), padding=padding)
+        result = tf.squeeze(x, axis=[1])
+        if use_bias:
+            bias = tf.get_variable("conv1d_filter_bias", dtype=tf.float32, 
+                                   initializer=tf.zeros(filters_out,))
+            result += bias
+        return result
     
 
 def bn(x, training, name=None):

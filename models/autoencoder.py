@@ -10,18 +10,24 @@ def seq2seq_ae(input_batch, seq_lengths, is_training, seed=12321):
     original_seq_lengths = seq_lengths
     p = "VALID"
     net = bn(input_batch, is_training, "bn1")
-    layer1 = tf.layers.conv1d(net, 256, 11, strides=1, padding=p, use_bias=False, name="layer1",
+    
+    layer1 = tf.layers.conv1d(net, 256, 11, strides=1, padding=p, use_bias=True, name="layer1",
                      kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
+    layer1 = tf.nn.relu(layer1)
     seq_lengths = tf.ceil((tf.cast(seq_lengths, tf.float32) - 11 + 1) / 1.)
     net = bn(layer1, is_training, "bn2")
-    layer2 = tf.layers.conv1d(net, 256, 5, strides=2, padding=p, use_bias=False, name="layer2",
+
+    layer2 = tf.layers.conv1d(net, 256, 5, strides=2, padding=p, use_bias=True, name="layer2",
                      kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
+    layer2 = tf.nn.relu(layer2)
     seq_lengths = tf.ceil((tf.cast(seq_lengths, tf.float32) - 5 + 1) / 2.)
     net = bn(layer2, is_training, "bn3")
-    layer3 = tf.layers.conv1d(net, 256, 3, strides=2, padding=p, use_bias=False, name="layer3",
+
+    layer3 = tf.layers.conv1d(net, 256, 3, strides=2, padding=p, use_bias=True, name="layer3",
                      kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))   
-    net = bn(layer3, is_training, "bn4")
+    layer3 = tf.nn.relu(layer3)
     seq_lengths = tf.ceil((tf.cast(seq_lengths, tf.float32) - 3 + 1) / 2.)
+    net = bn(layer3, is_training, "bn4")
 
     encoder_outputs, encoder_final_state_tuple = lstm_layer(net, 512, seq_lengths)
     with tf.variable_scope("decoder"):
@@ -29,14 +35,25 @@ def seq2seq_ae(input_batch, seq_lengths, is_training, seed=12321):
 
     # TODO double check that these conv1d_transposes are actually outputting the correct size    
 
-    net = conv1d_transpose(decoder_outputs, get_tf_shape_as_list(layer2), 256, window_size=3, stride=2, padding=p, name="layer_d1")
+    net = conv1d_transpose(decoder_outputs, get_tf_shape_as_list(layer2), 256, window_size=3, 
+                            stride=2, padding=p, use_bias=True, name="layer_d1")
+    net = tf.nn.relu(net)
     net = bn(net, is_training, "bn_d1")
-    net = conv1d_transpose(net, get_tf_shape_as_list(layer1), 256, window_size=5, stride=2, padding=p, name="layer_d2")
+
+    net = conv1d_transpose(net, get_tf_shape_as_list(layer1), 256, window_size=5, stride=2, 
+                            padding=p, use_bias=True, name="layer_d2")
+    net = tf.nn.relu(net)
     net = bn(net, is_training, "bn_d2")
-    net = conv1d_transpose(net, get_tf_shape_as_list(input_batch), input_batch.get_shape()[-1], 
-                            window_size=11, stride=1, padding=p, name="layer_d3")
-    last_layer_bias = tf.get_variable("last_layer_bias", initializer=tf.zeros((input_batch.get_shape()[-1])))
-    net += last_layer_bias
+
+    net = conv1d_transpose(net, get_tf_shape_as_list(input_batch)[:-1] + [256], 256, 
+                            window_size=11, stride=1, padding=p, use_bias=True, name="layer_d3")
+    net = tf.nn.relu(net)
+    net = bn(net, is_training, "bn_d3")
+
+    net = tf.layers.conv1d(net, input_batch.get_shape()[-1], 1, strides=1, padding="VALID", 
+                        use_bias=True, name="final_layer",
+                        kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
+    # TODO final activation function depends on data normalization
     return net, [layer1, layer2, layer3, encoder_final_state_tuple.c]
     
 def seq2seq_ae_with_loss(input_batch, seq_lengths, training, seed=12321):
