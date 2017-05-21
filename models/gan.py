@@ -134,8 +134,15 @@ def setup_gan(inputs, seq_lengths):
     D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'discriminator')
     G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'generator')
 
+    D_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, 'discriminator')
     D_train_step = D_solver.minimize(D_loss, var_list=D_vars)
+    D_all_ops = D_update_ops + [D_train_step]
+    D_train_step = tf.group(*D_all_ops)
+
+    G_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, 'generator')
     G_train_step = G_solver.minimize(G_loss, var_list=G_vars)
+    G_all_ops = G_update_ops + [G_train_step]
+    G_train_step = tf.group(*G_all_ops)
 
     def run_training_step(sess, feed_dict={}, n_critic=5):
         for _ in range(n_critic):
