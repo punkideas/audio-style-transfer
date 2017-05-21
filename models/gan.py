@@ -12,23 +12,34 @@ def generator(sample_noise, output_dim, is_training, name="generator", seed=3571
         original_seq_lengths = seq_lengths
         p = "VALID"
 
-        layer1 = tf.layers.conv1d(sample_noise, 256, 11, strides=1, padding=p, use_bias=False, name="layer1",
+        layer1 = tf.layers.conv1d(sample_noise, 256, 11, strides=1, padding=p, use_bias=True, name="layer1",
                          kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
+        layer1 = tf.nn.relu(layer1)
         seq_lengths = tf.ceil((tf.cast(seq_lengths, tf.float32) - 11 + 1) / 1.)
         net = bn(layer1, is_training, "bn1")
-        layer2 = tf.layers.conv1d(net, 256, 5, strides=2, padding=p, use_bias=False, name="layer2",
+
+        layer2 = tf.layers.conv1d(net, 256, 5, strides=2, padding=p, use_bias=True, name="layer2",
                          kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
+        layer2 = tf.nn.relu(layer2)
         seq_lengths = tf.ceil((tf.cast(seq_lengths, tf.float32) - 5 + 1) / 2.)
         net = bn(layer2, is_training, "bn2")
+
         with tf.variable_scope("lstm_1"):
             net, _ = lstm_layer(net, 512, seq_lengths)
         with tf.variable_scope("lstm_2"):
             net, _ = lstm_layer(net, 512, seq_lengths)
-        net = conv1d_transpose(net, get_tf_shape_as_list(layer1), 256, window_size=5, stride=2, padding=p, name="layer_d1")
+
+        net = conv1d_transpose(net, get_tf_shape_as_list(layer1), 256, window_size=5, stride=2, 
+                               padding=p, use_bias=True, name="layer_d1")
+        net = tf.nn.relu(net)
         net = bn(net, is_training, "bn_d1")
-        net = conv1d_transpose(net, [B, T, 256], 256, window_size=11, stride=1, padding=p, name="layer_d2")
-        net = tf.layers.conv1d(net, output_dim, 1, strides=1, padding=p, use_bias=False, name="layer_d3",
+
+        net = conv1d_transpose(net, [B, T, 256], 256, window_size=11, stride=1, 
+                               padding=p, use_bias=True, name="layer_d2")
+        net = tf.nn.relu(net)
+        net = tf.layers.conv1d(net, output_dim, 1, strides=1, padding=p, use_bias=True, name="layer_d3",
                          kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
+        # TODO usually end in tanh, but this requires outputs to be normalized into the range -1 to 1
         return net, original_seq_lengths
 
 def discriminator(d_in, seq_lengths, is_training, name="discriminator", seed=2376):
@@ -36,22 +47,29 @@ def discriminator(d_in, seq_lengths, is_training, name="discriminator", seed=237
         original_seq_lengths = seq_lengths
         p = "VALID"
 
-        layer1 = tf.layers.conv1d(d_in, 256, 11, strides=1, padding=p, use_bias=False, name="layer1",
+        layer1 = tf.layers.conv1d(d_in, 256, 11, strides=1, padding=p, use_bias=True, name="layer1",
                          kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
+        layer1 = tf.nn.relu(layer1)
         seq_lengths = tf.ceil((tf.cast(seq_lengths, tf.float32) - 11 + 1) / 1.)
         net = bn(layer1, is_training, "bn1")
-        layer2 = tf.layers.conv1d(net, 256, 5, strides=2, padding=p, use_bias=False, name="layer2",
+        
+        layer2 = tf.layers.conv1d(net, 256, 5, strides=2, padding=p, use_bias=True, name="layer2",
                          kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
+        layer2 = tf.nn.relu(layer2)
         seq_lengths = tf.ceil((tf.cast(seq_lengths, tf.float32) - 5 + 1) / 2.)
         net = bn(layer2, is_training, "bn2")
-        layer3 = tf.layers.conv1d(net, 256, 3, strides=2, padding=p, use_bias=False, name="layer3",
+        
+        layer3 = tf.layers.conv1d(net, 256, 3, strides=2, padding=p, use_bias=True, name="layer3",
                          kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
+        layer3 = tf.nn.relu(layer3)
+        seq_lengths = tf.ceil((tf.cast(seq_lengths, tf.float32) - 3 + 1) / 2.)
         net = bn(layer3, is_training, "bn3")
-        seq_lengths = tf.ceil((tf.cast(seq_lengths, tf.float32) - 3 + 1) / 2.)
-        layer4 = tf.layers.conv1d(net, 256, 3, strides=2, padding=p, use_bias=False, name="layer4",
+        
+        layer4 = tf.layers.conv1d(net, 256, 3, strides=2, padding=p, use_bias=True, name="layer4",
                          kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
-        net = bn(layer4, is_training, "bn4")
+        layer4 = tf.nn.relu(layer4)
         seq_lengths = tf.ceil((tf.cast(seq_lengths, tf.float32) - 3 + 1) / 2.)
+        net = bn(layer4, is_training, "bn4")
 
         encoder_outputs, encoder_final_state_tuple = unrolled_lstm_layer(net, 512, seq_lengths)
         net = tf.layers.dense(encoder_final_state_tuple.h, 1)
