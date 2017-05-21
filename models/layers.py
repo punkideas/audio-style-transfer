@@ -18,6 +18,31 @@ def lstm_layer(x, hidden_size, seq_lengths, initial_state=None, seed=123123):
     outputs, final_state = tf.nn.dynamic_rnn(cell, x, sequence_length=seq_lengths,
                       initial_state=initial_state, dtype=tf.float32)
     return outputs, final_state
+
+def unrolled_lstm_layer(x, hidden_size, seq_lengths, initial_state=None, seed=123123):
+    cell = tf.contrib.rnn.LSTMCell(hidden_size, reuse=tf.get_variable_scope().reuse, initializer= \
+                                   tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
+    B, T, C = get_tf_shape_as_list(x)
+    assert type(T) == type(int(0))
+    x = tf.split(x, T, axis=1)
+    x = [tf.squeeze(ele, axis=1) for ele in x]
+    cond = tf.reduce_all(tf.equal(seq_lengths, tf.ones_like(seq_lengths)*T))
+    assert_op = tf.Assert(cond, [seq_lengths, T])
+    with tf.control_dependencies([assert_op]):
+        #outputs, final_state = tf.contrib.rnn.static_rnn(cell, x, sequence_length=seq_lengths,
+        #              initial_state=initial_state, dtype=tf.float32)
+        outputs = []
+        if initial_state is None:
+           initial_state = cell.zero_state(B, dtype=tf.float32)
+        for t, next_i in enumerate(x):
+            reuse = True if t > 0 else None
+            with tf.variable_scope(tf.get_variable_scope(), reuse=reuse):
+                new_output, new_state = cell(next_i, initial_state)
+            outputs.append(new_output)
+            initial_state = new_state
+        final_state = initial_state
+    outputs = tf.concat([tf.expand_dims(o, axis=1) for o in outputs], axis=1)
+    return outputs, final_state
     
 def self_feeding_lstm_layer(max_output_sequence_length, initial_c_state, initial_m_state, seed=123123):
     """
