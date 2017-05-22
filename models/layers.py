@@ -106,5 +106,8 @@ def bn(x, training, name=None):
 	training=training,
 	trainable=True,
 	name=name,
-	reuse=None)    
+	reuse=None)   
+
+def leaky_relu(x, alpha = 0.01):
+    return tf.maximum(x, alpha * x)
 	

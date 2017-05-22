@@ -49,25 +49,25 @@ def discriminator(d_in, seq_lengths, is_training, name="discriminator", seed=237
 
         layer1 = tf.layers.conv1d(d_in, 256, 11, strides=1, padding=p, use_bias=True, name="layer1",
                          kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
-        layer1 = tf.nn.relu(layer1)
+        layer1 = leaky_relu(layer1)
         seq_lengths = tf.ceil((tf.cast(seq_lengths, tf.float32) - 11 + 1) / 1.)
         net = bn(layer1, is_training, "bn1")
         
         layer2 = tf.layers.conv1d(net, 256, 5, strides=2, padding=p, use_bias=True, name="layer2",
                          kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
-        layer2 = tf.nn.relu(layer2)
+        layer2 = leaky_relu(layer2)
         seq_lengths = tf.ceil((tf.cast(seq_lengths, tf.float32) - 5 + 1) / 2.)
         net = bn(layer2, is_training, "bn2")
         
         layer3 = tf.layers.conv1d(net, 256, 3, strides=2, padding=p, use_bias=True, name="layer3",
                          kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
-        layer3 = tf.nn.relu(layer3)
+        layer3 = leaky_relu(layer3)
         seq_lengths = tf.ceil((tf.cast(seq_lengths, tf.float32) - 3 + 1) / 2.)
         net = bn(layer3, is_training, "bn3")
         
         layer4 = tf.layers.conv1d(net, 256, 3, strides=2, padding=p, use_bias=True, name="layer4",
                          kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
-        layer4 = tf.nn.relu(layer4)
+        layer4 = leaky_relu(layer4)
         seq_lengths = tf.ceil((tf.cast(seq_lengths, tf.float32) - 3 + 1) / 2.)
         net = bn(layer4, is_training, "bn4")
 
