@@ -144,10 +144,11 @@ def setup_gan(inputs, seq_lengths):
     G_all_ops = G_update_ops + [G_train_step]
     G_train_step = tf.group(*G_all_ops)
 
-    def run_training_step(sess, feed_dict={}, n_critic=5):
-        for _ in range(n_critic):
-            _, d_loss = sess.run([D_train_step, D_loss], feed_dict=feed_dict)
-        _, g_loss = sess.run([G_train_step, G_loss], feed_dict=feed_dict)
+    def run_training_step(sess, feed_dicts=[{}, {}, {}, {}, {}], n_critic=5):
+        assert len(feed_dicts) == n_critic
+        for i in range(n_critic):
+            _, d_loss = sess.run([D_train_step, D_loss], feed_dict=feed_dicts[i])
+        _, g_loss = sess.run([G_train_step, G_loss], feed_dict=feed_dict[-1])
         return d_loss, g_loss
     
     return style_transfer_feature_maps, G_sample, D_loss, G_loss, \
@@ -185,7 +186,11 @@ def train_gan(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size, \
                 step += 1
                 feed_dict = {input_batch_placeholder : step_batch,
                              seq_lengths_placeholder : step_sequence_lengths}
-                step_d_loss, step_g_loss = run_training_step(sess, feed_dict=feed_dict) 
+                _, step_d_loss = sess.run([D_train_step, D_loss], feed_dict=feed_dict)
+                step_g_loss = None
+                if step % 5 == 0:
+                    _, step_g_loss = sess.run([G_train_step, G_loss], feed_dict=feed_dict)
+                    
                 print("Epoch {} of {}.  Step d_loss {}, step g_loss {} .".format(epoch, \
                             num_epochs, step_d_loss, step_g_loss))
                 
