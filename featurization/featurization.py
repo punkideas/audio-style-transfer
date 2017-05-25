@@ -89,6 +89,7 @@ def read_data_dir(dir_path, batch_size, shuffle=True, allow_smaller_last_batch=F
             time_length = max_time_dimension
         batch = [np.expand_dims(data_point, axis=0) for data_point in batch]
         batch = [fit_time_dim_to_size(data_point, time_length) for data_point in batch]
+        sequence_lengths = np.minimum(sequence_lengths, time_length)
         batch = np.concatenate(batch, axis=0)
         yield batch, sequence_lengths, fs
     

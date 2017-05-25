@@ -153,4 +153,46 @@ def setup_gan(inputs, seq_lengths):
     return style_transfer_feature_maps, G_sample, D_loss, G_loss, \
                 D_train_step, G_train_step, run_training_step
 
+def train_gan(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size, \
+                learning_rate, num_epochs, gpu_usage, tag, best_model_tag,
+                max_seq_length = 430, num_channels=1025):
+                
+    g = tf.Graph()
+    with g.as_default():
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_usage)
+        config = tf.ConfigProto(gpu_options=gpu_options)
+        sess = tf.Session(config=config) 
+        global_step = tf.Variable(0, name='global_step', trainable=False)
+        
+        saver = tf.train.Saver(var_list= None, max_to_keep=20)
+                
+        input_batch_placeholder = tf.placeholder(tf.float32, 
+                    shape=(batch_size, max_seq_length, num_channels), name="input_batch_placeholder")
+        seq_lengths_placeholder = tf.placeholder(tf.float32, 
+                    shape=(batch_size,), name="seq_lengths_placeholder")
+                    
+        style_transfer_feature_maps, G_sample, D_loss, G_loss, \
+                D_train_step, G_train_step, run_training_step = \
+            setup_gan(input_batch_placeholder, seq_lengths_placeholder)
+                            
+        step = 0
+        for epoch in range(num_epochs):
+            batch_iterator = read_data_dir(dir_path, batch_size, shuffle=True, 
+            allow_smaller_last_batch=False, fix_length=max_seq_length, 
+            file_formats=["wav", "mp3"], error_on_different_fs=True)
+            
+            for step_batch, step_sequence_lengths, step_fs in batch_iterator:
+                step += 1
+                feed_dict = {input_batch_placeholder : step_batch,
+                             seq_lengths_placeholder : step_sequence_lengths}
+                step_d_loss, step_g_loss = run_training_step(sess, feed_dict=feed_dict) 
+                print("Epoch {} of {}.  Step d_loss {}, step g_loss {} .".format(epoch, \
+                            num_epochs, step_d_loss, step_g_loss))
+                
+            save(sess, saver, checkpoint_dir, experiment_name, step, tag=tag)    
 
+    return layer_features, G_sample
+    
+    
+    
+    
