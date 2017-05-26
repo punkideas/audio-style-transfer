@@ -44,7 +44,7 @@ def main(_):
                     FLAGS.tag, FLAG_best_model_tag)
                 
     suffix = "_conv_ae"
-    conv_as.train_conv_ae(FLAGS.data_dir, FLAGS.experiment_name + suffix, \
+    conv_ae.train_conv_ae(FLAGS.data_dir, FLAGS.experiment_name + suffix, \
                 FLAG_checkpoint_dir + suffix, FLAG_log_dir + suffix, FLAGS.batch_size, \
                 FLAGS.learning_rate, FLAGS.num_epochs, FLAGS.gpu_usage, \
                 FLAGS.tag, FLAG_best_model_tag)
