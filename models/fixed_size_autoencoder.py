@@ -85,7 +85,7 @@ def setup_conv_ae(inputs, learning_rate=1e-3, is_training=True, global_step=None
     
 def train_conv_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size, \
                 learning_rate, num_epochs, gpu_usage, tag, best_model_tag,
-                max_seq_length = 430, num_channels=1025):
+                min_seq_length = 80, max_seq_length = 80, num_channels=1025):
                 
     g = tf.Graph()
     with g.as_default():
@@ -114,6 +114,9 @@ def train_conv_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size
             file_formats=["wav", "mp3"], error_on_different_fs=True)
             
             for step_batch, step_sequence_lengths, step_fs in batch_iterator:
+                if np.any(step_sequence_lengths < min_seq_length):
+                    continue
+                    
                 feed_dict = {input_batch_placeholder : step_batch}
                 step_loss = run_training_step(sess, feed_dict=feed_dict) 
                 print("Epoch {} of {}.  Step loss {} .".format(epoch, num_epochs, step_loss))
