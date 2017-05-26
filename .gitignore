@@ -4,5 +4,5 @@ env/
 *.mp4
 *.pyc
 *.pyo
-
+inputs/vctk_corpus/
 
