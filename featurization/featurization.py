@@ -36,7 +36,7 @@ def invert_spectrogram(spectrogram, fs):
     return x
    
 def save_spectrogram_as_audio(spectrogram, fs, path):
-    as_audio = invert_spectrogram(spectrogram.T, fs)
+    as_audio = invert_spectrogram(spectrogram, fs)
     librosa.output.write_wav(path, as_audio, fs)
  
 def fit_time_dim_to_size(x, size):
@@ -71,7 +71,7 @@ def read_data_dir(dir_path, batch_size, shuffle=True, allow_smaller_last_batch=F
     """
     data_file_names = []
     for file_format in file_formats:
-        data_file_names = data_file_names + glob(os.path.join(dir_path, "*." + file_format))
+        data_file_names = data_file_names + glob(os.path.join(dir_path, "*." + file_format))  + glob(os.path.join(dir_path, "**/*." + file_format))
     if shuffle:
         np.random.shuffle(data_file_names)
 
