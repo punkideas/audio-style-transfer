@@ -158,7 +158,7 @@ def setup_gan(inputs, seq_lengths):
 
 def train_gan(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size, \
                 learning_rate, num_epochs, gpu_usage, tag, best_model_tag,
-                max_seq_length = 430, num_channels=1025):
+                min_seq_length = 80, max_seq_length = 80, num_channels=1025):
                 
     g = tf.Graph()
     with g.as_default():
@@ -189,11 +189,14 @@ def train_gan(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size, \
             file_formats=["wav", "mp3"], error_on_different_fs=True)
             
             for step_batch, step_sequence_lengths, step_fs in batch_iterator:
+                if np.any(step_sequence_lengths < min_seq_length):
+                    continue
+
                 step += 1
                 feed_dict = {input_batch_placeholder : step_batch,
                              seq_lengths_placeholder : step_sequence_lengths}
                 _, step_d_loss = sess.run([D_train_step, D_loss], feed_dict=feed_dict)
-                step_g_loss = None
+                step_g_loss = "Skipped this step"
                 if step % 5 == 0:
                     _, step_g_loss = sess.run([G_train_step, G_loss], feed_dict=feed_dict)
                     
@@ -202,6 +205,26 @@ def train_gan(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size, \
                 
             print("Saving model")
             save(sess, saver, checkpoint_dir, experiment_name, step, tag=tag)    
+
+        sample_save_path = os.path.join(checkpoint_dir,  "samples")
+        if not os.path.exists(sample_save_path):
+            os.makedirs(sample_save_path)
+
+        batch_iterator = read_data_dir(data_dir, batch_size, shuffle=True,
+            allow_smaller_last_batch=False, fix_length=max_seq_length,
+            file_formats=["wav", "mp3"], error_on_different_fs=True)
+
+        for step_batch, step_sequence_lengths, step_fs in batch_iterator:
+            feed_dict = {input_batch_placeholder : step_batch,
+                             seq_lengths_placeholder : step_sequence_lengths}
+            step_G_sample = sess.run(G_sample, feed_dict=feed_dict)
+
+            for i in range(step_G_sample .shape[0]):
+                spectrogram = step_G_sample [i, :, :]
+                fs = step_fs[i]
+                save_spectrogram_as_audio(spectrogram, fs, os.path.join(sample_save_path, str(i) + "_sample.wav")
+
+            break
 
     return style_transfer_feature_maps, G_sample
     

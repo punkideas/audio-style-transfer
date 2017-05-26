@@ -131,4 +131,26 @@ def train_seq2_seq_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_
             print("Saving model")
             save(sess, saver, checkpoint_dir, experiment_name, sess.run(global_step), tag=tag)    
 
+        sample_save_path = os.path.join(checkpoint_dir,  "samples")
+        if not os.path.exists(sample_save_path):
+            os.makedirs(sample_save_path)
+
+        batch_iterator = read_data_dir(data_dir, batch_size, shuffle=True,
+            allow_smaller_last_batch=False, fix_length=max_seq_length,
+            file_formats=["wav", "mp3"], error_on_different_fs=True)
+
+        for step_batch, step_sequence_lengths, step_fs in batch_iterator:
+            feed_dict = {input_batch_placeholder : step_batch,
+                             seq_lengths_placeholder : step_sequence_lengths}
+            ae_sample_output = sess.run(ae_output, feed_dict=feed_dict)
+            
+            for i in range(ae_sample_output.shape[0]):
+                spectrogram = ae_sample_output[i, :, :]
+                fs = step_fs[i]
+                save_spectrogram_as_audio(spectrogram, fs, os.path.join(sample_save_path, str(i) + "_sample.wav")
+                save_spectrogram_as_audio(step_batch[i, :, :], fs, os.path.join(sample_save_path, str(i) + "_original.wav")
+
+            break
+
     return layer_features, ae_output
+

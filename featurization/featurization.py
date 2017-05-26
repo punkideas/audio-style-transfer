@@ -32,7 +32,11 @@ def invert_spectrogram(spectrogram, fs):
         p = np.angle(librosa.stft(x, N_FFT))
 
     return x
-    
+   
+def save_spectrogram_as_audio(spectrogram, fs, path):
+    as_audio = invert_spectrogram(spectrogram.T, fs)
+    librosa.output.write_wav(path, as_audio, fs)
+ 
 def fit_time_dim_to_size(x, size):
     time_dim = x.shape[1]
     if time_dim > size:
