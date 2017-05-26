@@ -5,4 +5,6 @@ env/
 *.pyc
 *.pyo
 inputs/vctk_corpus/
+saved_checkpoints/
+
 

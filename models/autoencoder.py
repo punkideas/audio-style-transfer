@@ -1,6 +1,6 @@
 import tensorflow as tf
 from layers import *
-from ..featurization.featurization import read_data_dir
+from featurization.featurization import read_data_dir
 from utils import *
 
 def seq2seq_ae(input_batch, seq_lengths, is_training, seed=12321):
@@ -75,7 +75,7 @@ def setup_seq2seq_ae(inputs, seq_lengths, learning_rate=1e-3, is_training=True, 
     # You can feed a placeholder for learning_rate if you want to use decay
     B, T, C = get_tf_shape_as_list(inputs)
     
-    ae_output, layer_features, loss = seq2seq_ae_with_loss(input_batch, seq_lengths, is_training)
+    ae_output, layer_features, loss = seq2seq_ae_with_loss(inputs, seq_lengths, is_training)
     
     solver = tf.train.AdamOptimizer(learning_rate=learning_rate)
     train_step = solver.minimize(loss, global_step=global_step)
@@ -113,8 +113,12 @@ def train_seq2_seq_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_
                             learning_rate=learning_rate, is_training=True, \
                             global_step=global_step)
                             
+        sess.run(tf.global_variables_initializer())
+
         for epoch in range(num_epochs):
-            batch_iterator = read_data_dir(dir_path, batch_size, shuffle=True, 
+            print("Start epoch {}, {}".format(epoch, experiment_name))
+
+            batch_iterator = read_data_dir(data_dir, batch_size, shuffle=True, 
             allow_smaller_last_batch=False, fix_length=max_seq_length, 
             file_formats=["wav", "mp3"], error_on_different_fs=True)
             
@@ -124,6 +128,7 @@ def train_seq2_seq_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_
                 step_loss = run_training_step(sess, feed_dict=feed_dict) 
                 print("Epoch {} of {}.  Step loss {} .".format(epoch, num_epochs, step_loss))
                 
+            print("Saving model")
             save(sess, saver, checkpoint_dir, experiment_name, sess.run(global_step), tag=tag)    
 
     return layer_features, ae_output

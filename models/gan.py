@@ -1,5 +1,7 @@
 import tensorflow as tf
 from layers import *
+from featurization.featurization import read_data_dir
+from utils import *
 
 def generator(sample_noise, output_dim, is_training, name="generator", seed=3571):
     """
@@ -175,10 +177,14 @@ def train_gan(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size, \
         style_transfer_feature_maps, G_sample, D_loss, G_loss, \
                 D_train_step, G_train_step, run_training_step = \
             setup_gan(input_batch_placeholder, seq_lengths_placeholder)
+
+        sess.run(tf.global_variables_initializer())
                             
         step = 0
         for epoch in range(num_epochs):
-            batch_iterator = read_data_dir(dir_path, batch_size, shuffle=True, 
+            print("Start epoch {}, {}".format(epoch, experiment_name))
+
+            batch_iterator = read_data_dir(data_dir, batch_size, shuffle=True, 
             allow_smaller_last_batch=False, fix_length=max_seq_length, 
             file_formats=["wav", "mp3"], error_on_different_fs=True)
             
@@ -194,9 +200,10 @@ def train_gan(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size, \
                 print("Epoch {} of {}.  Step d_loss {}, step g_loss {} .".format(epoch, \
                             num_epochs, step_d_loss, step_g_loss))
                 
+            print("Saving model")
             save(sess, saver, checkpoint_dir, experiment_name, step, tag=tag)    
 
-    return layer_features, G_sample
+    return style_transfer_feature_maps, G_sample
     
     
     
