@@ -33,13 +33,14 @@ def main(_):
     if FLAGS.tag is not None:
         FLAG_best_model_tag = FLAGS.tag + "_" + FLAGS.best_model_tag
     
-    """    
     suffix = "_ae"
     ae.train_seq2_seq_ae(FLAGS.data_dir, FLAGS.experiment_name + suffix, \
                 FLAG_checkpoint_dir + suffix, FLAG_log_dir + suffix, FLAGS.batch_size, \
                 FLAGS.learning_rate, FLAGS.num_epochs, FLAGS.gpu_usage, \
                 FLAGS.tag, FLAG_best_model_tag)
-    """
+    
+
+
     suffix = "_gan"
     gan.train_gan(FLAGS.data_dir, FLAGS.experiment_name + suffix, \
                 FLAG_checkpoint_dir + suffix, FLAG_log_dir + suffix, FLAGS.gan_batch_size, \

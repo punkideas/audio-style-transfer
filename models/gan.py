@@ -222,7 +222,7 @@ def train_gan(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size, \
             for i in range(step_G_sample .shape[0]):
                 spectrogram = step_G_sample [i, :, :]
                 fs = step_fs[i]
-                save_spectrogram_as_audio(spectrogram, fs, os.path.join(sample_save_path, str(i) + "_sample.wav")
+                save_spectrogram_as_audio(spectrogram, fs, os.path.join(sample_save_path, str(i) + "_sample.wav"))
 
             break
 

@@ -147,8 +147,8 @@ def train_seq2_seq_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_
             for i in range(ae_sample_output.shape[0]):
                 spectrogram = ae_sample_output[i, :, :]
                 fs = step_fs[i]
-                save_spectrogram_as_audio(spectrogram, fs, os.path.join(sample_save_path, str(i) + "_sample.wav")
-                save_spectrogram_as_audio(step_batch[i, :, :], fs, os.path.join(sample_save_path, str(i) + "_original.wav")
+                save_spectrogram_as_audio(spectrogram, fs, os.path.join(sample_save_path, str(i) + "_sample.wav"))
+                save_spectrogram_as_audio(step_batch[i, :, :], fs, os.path.join(sample_save_path, str(i) + "_original.wav"))
 
             break
 

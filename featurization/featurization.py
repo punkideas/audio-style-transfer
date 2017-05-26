@@ -3,6 +3,8 @@ from glob import glob
 import os
 import numpy as np
 
+np.random.seed(123)
+
 # https://github.com/DmitryUlyanov/neural-style-audio-tf
 # Reads wav file and produces spectrum
 # Fourier phases are ignored
