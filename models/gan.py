@@ -1,6 +1,6 @@
 import tensorflow as tf
 from layers import *
-from featurization.featurization import read_data_dir
+from featurization.featurization import read_data_dir, save_spectrogram_as_audio
 from utils import *
 
 def generator(sample_noise, output_dim, is_training, name="generator", seed=3571):

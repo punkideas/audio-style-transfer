@@ -1,6 +1,6 @@
 import tensorflow as tf
 from layers import *
-from featurization.featurization import read_data_dir
+from featurization.featurization import read_data_dir, save_spectrogram_as_audio
 from utils import *
 
 def seq2seq_ae(input_batch, seq_lengths, is_training, seed=12321):
