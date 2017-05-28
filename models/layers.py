@@ -87,6 +87,29 @@ def conv1d_transpose(x, output_shape, filters_out, window_size, stride, padding,
                                    initializer=tf.zeros(filters_out,))
             result += bias
         return result
+        
+  
+def conv2d_transpose(x, filters_out, window_size, stride, padding, use_bias = False, name=None, seed=123123):
+    """
+    output_shape must be a python list, and the last dimension must be known
+    No bias, 1d version of tf.nn.conv2d_transpose
+    """
+    assert padding == "SAME"
+    output_shape = tf.stack([input_shape[0], stride*input_shape[1], stride*input_shape[2], output_dim])
+    with tf.variable_scope(name):
+        filter = tf.get_variable("conv2d_filter", shape=(window_size, window_size, \
+                    filters_out, x.get_shape()[-1]), \
+                    dtype=tf.float32, 
+                    initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
+                    
+        result = tf.nn.conv2d_transpose(x, filter, output_shape=output_shape,
+        strides = (1, stride, stride, 1), padding=padding)
+        
+        if use_bias:
+            bias = tf.get_variable("conv1d_filter_bias", dtype=tf.float32, 
+                                   initializer=tf.zeros(filters_out,))
+            result += bias
+        return result
     
 
 def bn(x, training, name=None):

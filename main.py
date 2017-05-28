@@ -7,6 +7,7 @@ import models.autoencoder as ae
 import models.fixed_size_autoencoder as conv_ae
 import models.gan as gan
 import models.dcgan_2d as dcgan_2d
+import models.conv_autoencoder_2d as conv_ae_2d
 
 flags = tf.app.flags
 
@@ -38,11 +39,19 @@ def main(_):
     if FLAGS.tag is not None:
         FLAG_best_model_tag = FLAGS.tag + "_" + FLAGS.best_model_tag
         
+    suffix = "2d_conv_ae"
+    conv_ae_2d.train_conv_ae(FLAGS.data_dir, FLAGS.experiment_name + suffix, \
+                    FLAG_checkpoint_dir + suffix, FLAG_log_dir + suffix, FLAGS.fixed_len_batch_size, \
+                    FLAGS.learning_rate, FLAGS.num_epochs, FLAGS.gpu_usage, \
+                    FLAGS.tag, FLAG_best_model_tag)
+        
+    """
     suffix = "_2d_dcgan"
     dcgan_2d.train_gan(FLAGS.data_dir, FLAGS.experiment_name + suffix, \
                     FLAG_checkpoint_dir + suffix, FLAG_log_dir + suffix, FLAGS.fixed_len_batch_size, \
                     FLAGS.learning_rate, FLAGS.num_epochs, FLAGS.gpu_usage, \
                     FLAGS.tag, FLAG_best_model_tag)
+    """
         
     if FLAGS.recurrent_ae:
         suffix = "_ae"
