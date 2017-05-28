@@ -97,8 +97,6 @@ def train_conv_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size
         sess = tf.Session(config=config) 
         global_step = tf.Variable(0, name='global_step', trainable=False)
         
-        saver = tf.train.Saver(var_list= None, max_to_keep=20)
-                
         input_batch_placeholder = tf.placeholder(tf.float32, 
                     shape=(batch_size, max_seq_length, num_channels), name="input_batch_placeholder")
         decay_placeholder = tf.placeholder(tf.float32, shape=(), name="decay_placeholder")                   
@@ -109,6 +107,8 @@ def train_conv_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size
                             global_step=global_step, decay=decay_placeholder)
                             
         sess.run(tf.global_variables_initializer())
+
+        saver = tf.train.Saver(var_list= None, max_to_keep=20)
 
         for epoch in range(num_epochs):
             print("Start epoch {}, {}".format(epoch, experiment_name))

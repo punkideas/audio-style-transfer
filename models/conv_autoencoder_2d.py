@@ -76,7 +76,7 @@ def setup_conv_ae(inputs, learning_rate=1e-3, is_training=True, global_step=None
     if decay is not None:
         learning_rate *= decay
     
-    solver = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    solver = tf.train.AdamOptimizer(learning_rate=learning_rate, beta1=0.9)
     train_step = solver.minimize(loss, global_step=global_step)
 
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -100,8 +100,6 @@ def train_conv_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size
         sess = tf.Session(config=config) 
         global_step = tf.Variable(0, name='global_step', trainable=False)
         
-        saver = tf.train.Saver(var_list= None, max_to_keep=20)
-                
         input_batch_placeholder = tf.placeholder(tf.float32, 
                     shape=(batch_size, max_seq_length, num_channels), name="input_batch_placeholder")
         decay_placeholder = tf.placeholder(tf.float32, shape=(), name="decay_placeholder")                   
@@ -111,6 +109,7 @@ def train_conv_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size
                             learning_rate=learning_rate, is_training=True, \
                             global_step=global_step, decay=decay_placeholder)
                             
+        saver = tf.train.Saver(var_list=None, max_to_keep=20)
         if not load(sess, saver, checkpoint_dir, experiment_name, tag=tag):
             sess.run(tf.global_variables_initializer())
 

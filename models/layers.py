@@ -14,12 +14,12 @@ def get_tf_shape_as_list(x, mix_python=True):
     
 def stacked_different_dilation_layers(x, windows_size, filters_out, name, seed=12398):
     with tf.variable_scope(name):
-        di_1 = tf.layers.conv2d(net, filters_out, windows_size, strides=1, padding="SAME", use_bias=True, 
+        di_1 = tf.layers.conv2d(x, filters_out, windows_size, strides=1, padding="SAME", use_bias=True, 
                     name="di_1", kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
-        di_2 = tf.layers.conv2d(net, filters_out, windows_size, strides=1, padding="SAME", use_bias=True, 
+        di_2 = tf.layers.conv2d(x, filters_out, windows_size, strides=1, padding="SAME", use_bias=True, 
                     name="di_2", dilation_rate=(2, 1),
                     kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
-        di_4 = tf.layers.conv2d(net, filters_out, windows_size, strides=1, padding="SAME", use_bias=True, 
+        di_4 = tf.layers.conv2d(x, filters_out, windows_size, strides=1, padding="SAME", use_bias=True, 
                     name="di_4", dilation_rate=(4, 1), 
                     kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
         return tf.concat((di_1, di_2, di_4), axis=3)
