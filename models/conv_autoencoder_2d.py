@@ -12,8 +12,9 @@ def conv_ae(input_batch, is_training, seed=12321):
     p = "SAME"
     net = bn(input_batch, is_training, "bn1")
     
-    layer1 = tf.layers.conv2d(net, 256, 11, strides=1, padding=p, use_bias=True, name="layer1",
-                     kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
+    #layer1 = tf.layers.conv2d(net, 256, 11, strides=1, padding=p, use_bias=True, name="layer1",
+    #                 kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
+    layer1 = stacked_different_dilation_layers(net, 5, 75, "layer1_dilation_stack")
     layer1 = tf.nn.relu(layer1)
     net = bn(layer1, is_training, "bn2")
 
