@@ -95,7 +95,8 @@ def conv2d_transpose(x, filters_out, window_size, stride, padding, use_bias = Fa
     No bias, 1d version of tf.nn.conv2d_transpose
     """
     assert padding == "SAME"
-    output_shape = tf.stack([input_shape[0], stride*input_shape[1], stride*input_shape[2], output_dim])
+    input_shape = tf.shape(x)
+    output_shape = tf.stack([input_shape[0], stride*input_shape[1], stride*input_shape[2], filters_out])
     with tf.variable_scope(name):
         filter = tf.get_variable("conv2d_filter", shape=(window_size, window_size, \
                     filters_out, x.get_shape()[-1]), \

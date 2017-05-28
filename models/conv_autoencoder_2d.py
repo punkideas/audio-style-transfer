@@ -90,7 +90,7 @@ def setup_conv_ae(inputs, learning_rate=1e-3, is_training=True, global_step=None
     
 def train_conv_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size, \
                 learning_rate, num_epochs, gpu_usage, tag, best_model_tag,
-                min_seq_length = 80, max_seq_length = 80, num_channels=1025):
+                min_seq_length = 96, max_seq_length = 96, num_channels=1024):
                 
     g = tf.Graph()
     with g.as_default():
@@ -122,6 +122,8 @@ def train_conv_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size
             for step_batch, step_sequence_lengths, step_fs in batch_iterator:
                 if np.any(step_sequence_lengths < min_seq_length):
                     continue
+
+                step_batch = step_batch[:, :, :num_channels]
                     
                 feed_dict = {input_batch_placeholder : step_batch,
                              decay_placeholder : 0.98**epoch}
@@ -141,7 +143,8 @@ def train_conv_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size
 
         for step_batch, step_sequence_lengths, step_fs in batch_iterator:
             feed_dict = {input_batch_placeholder : step_batch}
-            ae_sample_output = sess.run(ae_output, feed_dict=feed_dict)
+            ae_sample = sess.run(ae_output, feed_dict=feed_dict)
+            ae_sample = np.concatenate((ae_sample, np.zeros_like(ae_sample)[:, :, :1]), axis=2)
             
             for i in range(ae_sample_output.shape[0]):
                 spectrogram = ae_sample_output[i, :, :]
