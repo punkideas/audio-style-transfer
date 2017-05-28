@@ -206,7 +206,10 @@ def train_gan(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size, \
             setup_gan(input_batch_placeholder, seq_lengths_placeholder)
 
         sess.run(tf.global_variables_initializer())
-                            
+        
+        if not load(sess, saver, checkpoint_dir, experiment_name, tag=tag):
+            print("Could not load checkpoint")        
+
         step = 0
         for epoch in range(num_epochs):
             print("Start epoch {}, {}".format(epoch, experiment_name))
@@ -248,7 +251,7 @@ def train_gan(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size, \
             feed_dict = {input_batch_placeholder : step_batch,
                              seq_lengths_placeholder : step_sequence_lengths}
             step_G_sample = sess.run(G_sample, feed_dict=feed_dict)
-            step_G_sample = np.stack((step_G_sample, np.zeros_like(step_G_sample)[:, :, 0]), axis=2)
+            step_G_sample = np.concatenate((step_G_sample, np.zeros_like(step_G_sample)[:, :, :1]), axis=2)
 
             for i in range(step_G_sample .shape[0]):
                 spectrogram = step_G_sample [i, :, :]
