@@ -13,7 +13,23 @@ import tflib.small_imagenet
 import tflib.ops.layernorm
 import tflib.plot
 
-def DCGANGenerator(n_samples, T, C, noise=None, dim=64, bn=True, nonlinearity=tf.nn.relu, name="generator"):
+def ReLULayer(name, n_in, n_out, inputs):
+    output = lib.ops.linear.Linear(name+'.Linear', n_in, n_out, inputs, initialization='he')
+    return tf.nn.relu(output)
+
+def LeakyReLULayer(name, n_in, n_out, inputs):
+    output = lib.ops.linear.Linear(name+'.Linear', n_in, n_out, inputs, initialization='he')
+    return LeakyReLU(output)
+
+def Batchnorm(name, axes, inputs):
+    if ('Discriminator' in name) and (MODE == 'wgan-gp'):
+        if axes != [0,2,3]:
+            raise Exception('Layernorm over non-standard axes is unsupported')
+        return lib.ops.layernorm.Layernorm(name,[1,2,3],inputs)
+    else:
+        return lib.ops.batchnorm.Batchnorm(name,axes,inputs,fused=True)
+
+def DCGANGenerator(n_samples, T, C, noise=None, dim=16, bn=True, nonlinearity=tf.nn.relu, name="generator"):
     with tf.variable_scope(name):
         # https://github.com/igul222/improved_wgan_training/blob/master/gan_64x64.py
         lib.ops.conv2d.set_weights_stdev(0.02)
@@ -56,41 +72,39 @@ def DCGANGenerator(n_samples, T, C, noise=None, dim=64, bn=True, nonlinearity=tf
         lib.ops.deconv2d.unset_weights_stdev()
         lib.ops.linear.unset_weights_stdev()
 
-        return tf.squeeze(tf.transpose(output, [0,2,3,1]), axis=[3]), tf.ones((n_samples,)) * T
+        out = tf.squeeze(tf.transpose(output, [0,2,3,1]), axis=[3])
+        out.set_shape((n_samples, T, C))
+        return out, tf.ones((n_samples,)) * T
 
 def discriminator(d_in, seq_lengths, is_training, name="discriminator", seed=2376):
     with tf.variable_scope(name):
         p = "VALID"
+        d_in = tf.expand_dims(d_in, axis=3)
 
-        layer1 = tf.layers.conv2d(d_in, 256, 11, strides=1, padding=p, use_bias=True, name="layer1",
+        layer1 = tf.layers.conv2d(d_in, 128, 11, strides=1, padding=p, use_bias=True, name="layer1",
                          kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
         layer1 = leaky_relu(layer1)
         net = bn(layer1, is_training, "bn1")
         
-        layer2 = tf.layers.conv2d(net, 256, 5, strides=2, padding=p, use_bias=True, name="layer2",
+        layer2 = tf.layers.conv2d(net, 64, 5, strides=2, padding=p, use_bias=True, name="layer2",
                          kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
         layer2 = leaky_relu(layer2)
         net = bn(layer2, is_training, "bn2")
         
-        layer3 = tf.layers.conv2d(net, 256, 3, strides=2, padding=p, use_bias=True, name="layer3",
+        layer3 = tf.layers.conv2d(net, 32, 3, strides=2, padding=p, use_bias=True, name="layer3",
                          kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
         layer3 = leaky_relu(layer3)
-        net = bn(layer3, is_training, "bn3")
+        # net = bn(layer3, is_training, "bn3")
         
-        layer4 = tf.layers.conv2d(net, 256, 3, strides=2, padding=p, use_bias=True, name="layer4",
+        layer4 = tf.layers.conv2d(net, 16, 3, strides=2, padding=p, use_bias=True, name="layer4",
                          kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
         layer4 = leaky_relu(layer4)
         net = bn(layer4, is_training, "bn4")  
         
-        layer5 = tf.layers.conv2d(net, 256, 3, strides=2, padding=p, use_bias=True, name="layer5",
-                         kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
-        layer5 = leaky_relu(layer5)
-        net = bn(layer5, is_training, "bn4")
-
         net = tf.reshape(net, [-1] + [np.prod(get_tf_shape_as_list(net)[1:])])
         net = tf.layers.dense(net, 1)
         
-        return net, [layer1, layer2, layer3, layer4, layer5]
+        return net, [layer1, layer2, layer3, layer4]
 
 def wgan_loss(logits_real, logits_fake, batch_size, x, G_sample, x_seq_lengths):
     """Compute the WGAN-GP loss.
@@ -135,7 +149,7 @@ def wgan_loss(logits_real, logits_fake, batch_size, x, G_sample, x_seq_lengths):
     return D_loss, G_loss
     
 def setup_gan(inputs, seq_lengths):
-    B, T, C = get_tf_shape_as_list(inputs
+    B, T, C = get_tf_shape_as_list(inputs)
     G_sample, G_seq_lengths = DCGANGenerator(B, T, C)
     real_logits, style_transfer_feature_maps = discriminator(inputs, seq_lengths, is_training=True)
     with tf.variable_scope(tf.get_variable_scope(),reuse=True) as scope:
@@ -171,7 +185,7 @@ def setup_gan(inputs, seq_lengths):
 
 def train_gan(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size, \
                 learning_rate, num_epochs, gpu_usage, tag, best_model_tag,
-                min_seq_length = 96, max_seq_length = 96, num_channels=1025):
+                min_seq_length = 96, max_seq_length = 96, num_channels=1024):
                 
     g = tf.Graph()
     with g.as_default():
@@ -205,6 +219,8 @@ def train_gan(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size, \
                 if np.any(step_sequence_lengths < min_seq_length):
                     continue
 
+                step_batch = step_batch[:, :, :num_channels]
+
                 step += 1
                 feed_dict = {input_batch_placeholder : step_batch,
                              seq_lengths_placeholder : step_sequence_lengths}
@@ -228,9 +244,11 @@ def train_gan(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size, \
             file_formats=["wav", "mp3"], error_on_different_fs=True)
 
         for step_batch, step_sequence_lengths, step_fs in batch_iterator:
+            step_batch = step_batch[:, :, :num_channels]
             feed_dict = {input_batch_placeholder : step_batch,
                              seq_lengths_placeholder : step_sequence_lengths}
             step_G_sample = sess.run(G_sample, feed_dict=feed_dict)
+            step_G_sample = np.stack((step_G_sample, np.zeros_like(step_G_sample)[:, :, 0]), axis=2)
 
             for i in range(step_G_sample .shape[0]):
                 spectrogram = step_G_sample [i, :, :]

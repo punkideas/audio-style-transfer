@@ -14,7 +14,7 @@ flags.DEFINE_string('experiment_name', 'first_run', 'Name of the experiment bein
 flags.DEFINE_string('data_dir', None, "directory where data is stored")
 flags.DEFINE_string('checkpoint_dir', './saved_checkpoints/', 'Checkpoint directory')
 flags.DEFINE_integer('batch_size', 100, "The batch size")
-flags.DEFINE_integer('fixed_len_batch_size', 40, "The batch size")
+flags.DEFINE_integer('fixed_len_batch_size', 10, "The batch size")
 flags.DEFINE_float('learning_rate', 1e-3, "The learning rate")
 flags.DEFINE_float('gpu_usage', 0.96, "The gpu usage as a percentage")
 flags.DEFINE_integer('num_epochs', 20, "The number of epochs to train")
@@ -38,6 +38,7 @@ def main(_):
     if FLAGS.tag is not None:
         FLAG_best_model_tag = FLAGS.tag + "_" + FLAGS.best_model_tag
         
+    suffix = "_2d_dcgan"
     dcgan_2d.train_gan(FLAGS.data_dir, FLAGS.experiment_name + suffix, \
                     FLAG_checkpoint_dir + suffix, FLAG_log_dir + suffix, FLAGS.fixed_len_batch_size, \
                     FLAGS.learning_rate, FLAGS.num_epochs, FLAGS.gpu_usage, \

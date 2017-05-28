@@ -60,15 +60,18 @@ def conv_ae_with_loss(input_batch, training, seed=12321):
     training: If true, use mean of batch for batch norm, otherwise using moving average
     """
     ae_output, layer_features = conv_ae(input_batch, training, seed=seed)
-    loss = tf.nn.l2_loss(input_batch - ae_output) / tf.cast(get_tf_shape_as_list(input_batch)[0], tf.float32)
+    loss = tf.reduce_sum(tf.abs(input_batch - ae_output)) / tf.cast(get_tf_shape_as_list(input_batch)[0], tf.float32)
     return ae_output, layer_features, loss
 
     
-def setup_conv_ae(inputs, learning_rate=1e-3, is_training=True, global_step=None):
+def setup_conv_ae(inputs, learning_rate=1e-3, is_training=True, global_step=None, decay=None):
     # You can feed a placeholder for learning_rate if you want to use decay
     B, T, C = get_tf_shape_as_list(inputs)
     
     ae_output, layer_features, loss = conv_ae_with_loss(inputs, is_training)
+
+    if decay is not None:
+        learning_rate *= decay
     
     solver = tf.train.AdamOptimizer(learning_rate=learning_rate)
     train_step = solver.minimize(loss, global_step=global_step)
@@ -98,11 +101,12 @@ def train_conv_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size
                 
         input_batch_placeholder = tf.placeholder(tf.float32, 
                     shape=(batch_size, max_seq_length, num_channels), name="input_batch_placeholder")
-                    
+        decay_placeholder = tf.placeholder(tf.float32, shape=(), name="decay_placeholder")                   
+ 
         layer_features, ae_output, loss, train_step, run_training_step = \
             setup_conv_ae(input_batch_placeholder, \
                             learning_rate=learning_rate, is_training=True, \
-                            global_step=global_step)
+                            global_step=global_step, decay=decay_placeholder)
                             
         sess.run(tf.global_variables_initializer())
 
@@ -117,7 +121,8 @@ def train_conv_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size
                 if np.any(step_sequence_lengths < min_seq_length):
                     continue
                     
-                feed_dict = {input_batch_placeholder : step_batch}
+                feed_dict = {input_batch_placeholder : step_batch,
+                             decay_placeholder : 0.98**epoch}
                 step_loss = run_training_step(sess, feed_dict=feed_dict) 
                 print("Epoch {} of {}.  Step loss {} .".format(epoch, num_epochs, step_loss))
                 
