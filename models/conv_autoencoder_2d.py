@@ -110,7 +110,8 @@ def train_conv_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size
                             learning_rate=learning_rate, is_training=True, \
                             global_step=global_step, decay=decay_placeholder)
                             
-        sess.run(tf.global_variables_initializer())
+        if not load(sess, saver, checkpoint_dir, experiment_name, tag=tag):
+            sess.run(tf.global_variables_initializer())
 
         for epoch in range(num_epochs):
             print("Start epoch {}, {}".format(epoch, experiment_name))
@@ -142,12 +143,12 @@ def train_conv_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size
             file_formats=["wav", "mp3"], error_on_different_fs=True)
 
         for step_batch, step_sequence_lengths, step_fs in batch_iterator:
-            feed_dict = {input_batch_placeholder : step_batch}
+            feed_dict = {input_batch_placeholder : step_batch[:, :, :num_channels]}
             ae_sample = sess.run(ae_output, feed_dict=feed_dict)
             ae_sample = np.concatenate((ae_sample, np.zeros_like(ae_sample)[:, :, :1]), axis=2)
             
-            for i in range(ae_sample_output.shape[0]):
-                spectrogram = ae_sample_output[i, :, :]
+            for i in range(ae_sample.shape[0]):
+                spectrogram = ae_sample[i, :, :]
                 fs = step_fs[i]
                 save_spectrogram_as_audio(spectrogram, fs, os.path.join(sample_save_path, str(i) + "_sample.wav"))
                 save_spectrogram_as_audio(step_batch[i, :, :], fs, os.path.join(sample_save_path, str(i) + "_original.wav"))
