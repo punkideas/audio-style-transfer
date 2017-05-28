@@ -3,6 +3,8 @@ from glob import glob
 import os
 import numpy as np
 
+np.random.seed(123)
+
 # https://github.com/DmitryUlyanov/neural-style-audio-tf
 # Reads wav file and produces spectrum
 # Fourier phases are ignored
@@ -32,12 +34,16 @@ def invert_spectrogram(spectrogram, fs):
         p = np.angle(librosa.stft(x, N_FFT))
 
     return x
-    
+   
+def save_spectrogram_as_audio(spectrogram, fs, path):
+    as_audio = invert_spectrogram(spectrogram, fs)
+    librosa.output.write_wav(path, as_audio, fs)
+ 
 def fit_time_dim_to_size(x, size):
     time_dim = x.shape[1]
-    if time_dim < size:
+    if time_dim > size:
         return x[:, :size, :]
-    elif time_dim > size:
+    elif time_dim < size:
         extra_size = size - time_dim
         return np.pad(x, [(0,0), (0, extra_size), (0,0)], 'constant')
     else:
@@ -65,9 +71,11 @@ def read_data_dir(dir_path, batch_size, shuffle=True, allow_smaller_last_batch=F
     """
     data_file_names = []
     for file_format in file_formats:
-        data_file_names = data_file_names + glob(os.path.join(dir_path, "*." + file_format))
+        data_file_names = data_file_names + glob(os.path.join(dir_path, "*." + file_format))  + glob(os.path.join(dir_path, "**/*." + file_format))
     if shuffle:
         np.random.shuffle(data_file_names)
+
+    print("Found {} files in {}".format(len(data_file_names), dir_path))
         
     while len(data_file_names) > 0:
         batch = data_file_names[:batch_size]
