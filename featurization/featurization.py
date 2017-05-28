@@ -36,6 +36,9 @@ def invert_spectrogram(spectrogram, fs):
     return x
    
 def save_spectrogram_as_audio(spectrogram, fs, path):
+    """
+    spectrogram shape is: (time, channels)
+    """
     as_audio = invert_spectrogram(spectrogram, fs)
     librosa.output.write_wav(path, as_audio, fs)
  
