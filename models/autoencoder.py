@@ -101,8 +101,6 @@ def train_seq2_seq_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_
         sess = tf.Session(config=config) 
         global_step = tf.Variable(0, name='global_step', trainable=False)
         
-        saver = tf.train.Saver(var_list= None, max_to_keep=20)
-                
         input_batch_placeholder = tf.placeholder(tf.float32, 
                     shape=(batch_size, max_seq_length, num_channels), name="input_batch_placeholder")
         seq_lengths_placeholder = tf.placeholder(tf.float32, 
@@ -112,7 +110,8 @@ def train_seq2_seq_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_
             setup_seq2seq_ae(input_batch_placeholder, seq_lengths_placeholder, \
                             learning_rate=learning_rate, is_training=True, \
                             global_step=global_step)
-                            
+           
+        saver = tf.train.Saver(var_list= None, max_to_keep=20)                 
         sess.run(tf.global_variables_initializer())
 
         for epoch in range(num_epochs):

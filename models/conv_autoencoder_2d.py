@@ -12,8 +12,9 @@ def conv_ae(input_batch, is_training, seed=12321):
     p = "SAME"
     net = bn(input_batch, is_training, "bn1")
     
-    layer1 = tf.layers.conv2d(net, 256, 11, strides=1, padding=p, use_bias=True, name="layer1",
-                     kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
+    #layer1 = tf.layers.conv2d(net, 256, 11, strides=1, padding=p, use_bias=True, name="layer1",
+    #                 kernel_initializer=tf.contrib.layers.xavier_initializer(uniform=False, seed=seed))
+    layer1 = stacked_different_dilation_layers(net, 5, 75, "layer1_dilation_stack")
     layer1 = tf.nn.relu(layer1)
     net = bn(layer1, is_training, "bn2")
 
@@ -75,7 +76,7 @@ def setup_conv_ae(inputs, learning_rate=1e-3, is_training=True, global_step=None
     if decay is not None:
         learning_rate *= decay
     
-    solver = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    solver = tf.train.AdamOptimizer(learning_rate=learning_rate, beta1=0.9)
     train_step = solver.minimize(loss, global_step=global_step)
 
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -99,8 +100,6 @@ def train_conv_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size
         sess = tf.Session(config=config) 
         global_step = tf.Variable(0, name='global_step', trainable=False)
         
-        saver = tf.train.Saver(var_list= None, max_to_keep=20)
-                
         input_batch_placeholder = tf.placeholder(tf.float32, 
                     shape=(batch_size, max_seq_length, num_channels), name="input_batch_placeholder")
         decay_placeholder = tf.placeholder(tf.float32, shape=(), name="decay_placeholder")                   
@@ -110,7 +109,9 @@ def train_conv_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size
                             learning_rate=learning_rate, is_training=True, \
                             global_step=global_step, decay=decay_placeholder)
                             
-        sess.run(tf.global_variables_initializer())
+        saver = tf.train.Saver(var_list=None, max_to_keep=20)
+        if not load(sess, saver, checkpoint_dir, experiment_name, tag=tag):
+            sess.run(tf.global_variables_initializer())
 
         for epoch in range(num_epochs):
             print("Start epoch {}, {}".format(epoch, experiment_name))
@@ -142,12 +143,12 @@ def train_conv_ae(data_dir, experiment_name, checkpoint_dir, log_dir, batch_size
             file_formats=["wav", "mp3"], error_on_different_fs=True)
 
         for step_batch, step_sequence_lengths, step_fs in batch_iterator:
-            feed_dict = {input_batch_placeholder : step_batch}
+            feed_dict = {input_batch_placeholder : step_batch[:, :, :num_channels]}
             ae_sample = sess.run(ae_output, feed_dict=feed_dict)
             ae_sample = np.concatenate((ae_sample, np.zeros_like(ae_sample)[:, :, :1]), axis=2)
             
-            for i in range(ae_sample_output.shape[0]):
-                spectrogram = ae_sample_output[i, :, :]
+            for i in range(ae_sample.shape[0]):
+                spectrogram = ae_sample[i, :, :]
                 fs = step_fs[i]
                 save_spectrogram_as_audio(spectrogram, fs, os.path.join(sample_save_path, str(i) + "_sample.wav"))
                 save_spectrogram_as_audio(step_batch[i, :, :], fs, os.path.join(sample_save_path, str(i) + "_original.wav"))
