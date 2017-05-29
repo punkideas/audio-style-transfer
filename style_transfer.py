@@ -25,7 +25,7 @@ class Config():
     experiment_name = "experiment"
 
     n_fft = 2048                            # STFT window size. See librosa.core.stft docs
-    input_samples = 430                     # Free to change this. 
+    input_samples = 300                     # Free to change this. 
     input_channels = 1 + n_fft/2            # Computed. See librosa.core.stft docs on stft return value
 
     fe_content_layer = 3                    # For feature extraction 
@@ -35,7 +35,7 @@ class Config():
     )
     fe_model = "seq2seq_ae"                 # Feature extractor model name (see FEATURE_EXTRACTOR_MODELS)
     fe_checkpoint_dir = "checkpoints"       # Dir for feature extractor checkpoint files
-    fe_checkpoint_name = "overfit_on_p228"  # Name of feature extractor checkpoint file
+    fe_checkpoint_name = "2017-05-29-1am"  # Name of feature extractor checkpoint file
 
     gen_alpha = 1e-2                        # weight for content loss
     gen_beta = 1                            # (redundant) weight for style loss
@@ -45,7 +45,7 @@ class Config():
     gen_initializer = "random"
     gen_model = "seq2seq_ae"                 # Model name (see FEATURE_EXTRACTOR_MODELS)
     gen_checkpoint_dir = "checkpoints"       # Dir for checkpoint files
-    gen_checkpoint_name = "overfit_on_p228"  # Name of checkpoint file
+    gen_checkpoint_name = "2017-05-29-1am"  # Name of checkpoint file
     gen_content_layer = 3                    # For generating the output audio
     gen_style_layers = (                     # For generating the output audio
         (1, 0.5),
@@ -80,9 +80,7 @@ class StyleTransfer():
         result = {"loss":[]}
         content_spectrogram, content_sr = self.read_audio(content_filename)
         style_spectrogram, style_sr = self.read_audio(style_filename)
-        content_samples = content_spectrogram.shape[1]
-        content_channels = content_spectrogram.shape[0]
-        style_spectrogram = style_spectrogram[:content_channels, :content_samples]
+        print("CONTENT SPECTRO SHAPE", content_spectrogram.shape)
         # Save content and style spectrograms
         source_content_features = self.extract_content_features(content_spectrogram)
         source_style_features = self.extract_style_features(style_spectrogram)
@@ -137,14 +135,14 @@ class StyleTransfer():
         "Feeds a spectrogram into the feature extractor model and returns the content layer's features"
         return self.fe_session.run(
             self.fe_layer_features[self.config.fe_content_layer],
-            feed_dict={self.input_batch_placeholder: np.array(spectrogram.T)}
+            feed_dict={self.input_batch_placeholder: [np.array(spectrogram.T)]}
         )
 
     def reconstruct_spectrogram(self, spectrogram):
         "Returns a reconstruction of the spectrogram after passing through the feature extractor autoencoder"
         reconstruction =  self.fe_session.run(
             self.fe_outputs, 
-            feed_dict={self.input_batch_placeholder: np.array(spectrogram.T)}
+            feed_dict={self.input_batch_placeholder: [np.array(spectrogram.T)]}
         )
         return np.transpose(reconstruction, (0, 2, 1))
         
@@ -181,12 +179,17 @@ class StyleTransfer():
         return session, outputs, layer_features, loss
 
     def read_audio(self, filename):
-        "Reads an audio file and converts it into a logarithmic spectrogram"
+        """
+        Reads an audio file and converts it into a logarithmic spectrogram. Return value is 
+        a numpy array of shape (self.config.input_channels, self.config.input_samples)
+        """
         x, sample_rate = librosa.load(filename)
         S = librosa.stft(x, self.config.n_fft)
         p = np.angle(S)
         S = np.log1p(np.abs(S[:,:self.config.input_samples]))  
-        return S, sample_rate
+        required_padding = max(0, self.config.input_samples - S.shape[1])
+        S = np.pad(S, ((0,0), (0, required_padding)), "constant")
+        return np.array(S), sample_rate
 
     def write_audio(self, filename, spectrogram, sample_rate):
         """
