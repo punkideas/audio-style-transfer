@@ -1,6 +1,7 @@
 import tensorflow as tf
 import librosa
 from models.autoencoder import * 
+from models.conv_autoencoder_2d import conv_ae_with_loss
 from models.utils import load, print_number_of_parameters
 import os
 import numpy as np
@@ -11,6 +12,7 @@ FEATURE_EXTRACTOR_MODELS = {
     # More could be added here, so long as they are functions conforming to the API
     # outputs, layers, loss = fn(input_placeholder, seq_lengths, training)
     "seq2seq_ae": seq2seq_ae_with_loss,
+    "conv_autoencoder_2d": conv_ae_with_loss
 }
 
 OPTIMIZERS = {
@@ -33,7 +35,7 @@ class Config():
         (1, 0.5),
         (2, 0.5)
     )
-    fe_model = "seq2seq_ae"                 # Feature extractor model name (see FEATURE_EXTRACTOR_MODELS)
+    fe_model = "conv_autoencoder_2d"             # Feature extractor model name (see FEATURE_EXTRACTOR_MODELS)
     fe_checkpoint = "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"# Dir for feature extractor checkpoint files
 
     gen_alpha = 1e-2                        # weight for content loss
@@ -42,7 +44,7 @@ class Config():
     gen_learning_rate = 1000.0
     gen_iterations = 1000
     gen_initializer = "random"
-    gen_model = "seq2seq_ae"                 # Model name (see FEATURE_EXTRACTOR_MODELS)
+    gen_model = "conv_ae_with_loss"                 # Model name (see FEATURE_EXTRACTOR_MODELS)
     gen_checkpoint = "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"# Dir for feature extractor checkpoint files
     gen_content_layer = 3                    # For generating the output audio
     gen_style_layers = (                     # For generating the output audio
@@ -125,14 +127,14 @@ class StyleTransfer():
         "Feeds a spectrogram into the feature extractor model and returns features for all the style layers"
         return self.fe_session.run(
             [self.fe_layer_features[i] for i, w in self.config.fe_style_layers],
-            feed_dict={self.input_batch_placeholder: np.array(spectrogram.T)}
+            feed_dict={self.input_batch_placeholder: (spectrogram.T,)}
         )
         
     def extract_content_features(self, spectrogram):
         "Feeds a spectrogram into the feature extractor model and returns the content layer's features"
         return self.fe_session.run(
             self.fe_layer_features[self.config.fe_content_layer],
-            feed_dict={self.input_batch_placeholder: [spectrogram.T]}
+            feed_dict={self.input_batch_placeholder: (spectrogram.T,)}
         )
 
     def reconstruct_spectrogram(self, spectrogram):
@@ -164,28 +166,10 @@ class StyleTransfer():
         "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"
         """
         session = tf.Session()
-
-        saver = tf.train.import_meta_graph(checkpoint + ".meta") 
-        #saver = tf.train.Saver()
-        saver.restore(session, checkpoint)
-
-
-
         model = FEATURE_EXTRACTOR_MODELS[self.config.fe_model]
-        with tf.variable_scope(tf.get_variable_scope(), reuse=True):
-            op = session.graph.get_tensor_by_name("bn1/beta:0")
-            print("LOADING DATA FOR bn1/beta:0", session.run(op))
-
-            outputs, layer_features, loss = model(
-                model_input, 
-                seq_lengths=tf.constant([self.config.input_samples]),
-                training=False
-            )
-
-        #saver = tf.train.Saver()
-        #saver.restore(session, checkpoint)
-
-    
+        outputs, layer_features, loss = model(model_input, training=False)
+        saver = tf.train.Saver()
+        saver.restore(session, checkpoint)
         return session, outputs, layer_features, loss
 
     def read_audio(self, filename):
