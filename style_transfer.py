@@ -34,8 +34,7 @@ class Config():
         (2, 0.5)
     )
     fe_model = "seq2seq_ae"                 # Feature extractor model name (see FEATURE_EXTRACTOR_MODELS)
-    fe_checkpoint_dir = "checkpoints"       # Dir for feature extractor checkpoint files
-    fe_checkpoint_name = "2017-05-29-1am"  # Name of feature extractor checkpoint file
+    fe_checkpoint = "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"# Dir for feature extractor checkpoint files
 
     gen_alpha = 1e-2                        # weight for content loss
     gen_beta = 1                            # (redundant) weight for style loss
@@ -44,8 +43,7 @@ class Config():
     gen_iterations = 1000
     gen_initializer = "random"
     gen_model = "seq2seq_ae"                 # Model name (see FEATURE_EXTRACTOR_MODELS)
-    gen_checkpoint_dir = "checkpoints"       # Dir for checkpoint files
-    gen_checkpoint_name = "2017-05-29-1am"  # Name of checkpoint file
+    gen_checkpoint = "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"# Dir for feature extractor checkpoint files
     gen_content_layer = 3                    # For generating the output audio
     gen_style_layers = (                     # For generating the output audio
         (1, 0.5),
@@ -95,8 +93,7 @@ class StyleTransfer():
             session, outputs, layer_features, loss = self.get_model(
                 self.config.gen_model,
                 x,
-                self.config.gen_checkpoint_dir,
-                self.config.gen_checkpoint_name
+                self.config.gen_checkpoint,
             )
         gen_content_features = layer_features[self.config.gen_content_layer]
         content_loss = tf.nn.l2_loss(gen_content_features - source_style_features)
@@ -135,14 +132,14 @@ class StyleTransfer():
         "Feeds a spectrogram into the feature extractor model and returns the content layer's features"
         return self.fe_session.run(
             self.fe_layer_features[self.config.fe_content_layer],
-            feed_dict={self.input_batch_placeholder: [np.array(spectrogram.T)]}
+            feed_dict={self.input_batch_placeholder: [spectrogram.T]}
         )
 
     def reconstruct_spectrogram(self, spectrogram):
         "Returns a reconstruction of the spectrogram after passing through the feature extractor autoencoder"
         reconstruction =  self.fe_session.run(
             self.fe_outputs, 
-            feed_dict={self.input_batch_placeholder: [np.array(spectrogram.T)]}
+            feed_dict={self.input_batch_placeholder: [spectrogram.T]}
         )
         return np.transpose(reconstruction, (0, 2, 1))
         
@@ -158,13 +155,15 @@ class StyleTransfer():
         self.fe_session, self.fe_outputs, self.fe_layer_features, self.fe_loss = self.get_model(
             self.config.fe_model,
             self.input_batch_placeholder,
-            self.config.fe_checkpoint_dir,
-            self.config.fe_checkpoint_name,
+            self.config.fe_checkpoint,
             training=True
         )
 
-    def get_model(self, model_name, model_input, checkpoint_dir=None, checkpoint_name=None, training=False):
-        "Returns a model, optionally loaded with checkpoint data"
+    def get_model(self, model_name, model_input, checkpoint, training=False):
+        """
+        Returns a model loaded with checkpoint data. Checkpoint should be something like
+        "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"
+        """
         model = FEATURE_EXTRACTOR_MODELS[self.config.fe_model]
         outputs, layer_features, loss = model(
             model_input, 
@@ -173,9 +172,13 @@ class StyleTransfer():
             training=training
         )
         session = tf.Session()
-        if checkpoint_dir and checkpoint_name:
-            saver = tf.train.Saver(var_list=None, max_to_keep=20)
-            load(session, saver, checkpoint_dir, checkpoint_name, tag=None)
+        saver = tf.train.import_meta_graph(checkpoint + ".meta") 
+        #saver = tf.train.Saver(var_list=None, max_to_keep=20)
+        print("LOADING CHECKPOINT: {}".format(checkpoint))
+        saver.restore(session, checkpoint)
+        print("TESTING RESTORE:")
+        print([op.name for op in session.graph.get_operations()])
+        print(session.run("bn1/beta"))
         return session, outputs, layer_features, loss
 
     def read_audio(self, filename):
