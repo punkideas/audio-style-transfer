@@ -1,7 +1,7 @@
 import tensorflow as tf
 import librosa
 from models.autoencoder import * 
-from models.utils import load
+from models.utils import load, print_number_of_parameters
 import os
 import numpy as np
 #import matplotlib.pyplot as plt
@@ -93,7 +93,7 @@ class StyleTransfer():
             session, outputs, layer_features, loss = self.get_model(
                 self.config.gen_model,
                 x,
-                self.config.gen_checkpoint,
+                self.config.gen_checkpoint
             )
         gen_content_features = layer_features[self.config.gen_content_layer]
         content_loss = tf.nn.l2_loss(gen_content_features - source_style_features)
@@ -155,32 +155,37 @@ class StyleTransfer():
         self.fe_session, self.fe_outputs, self.fe_layer_features, self.fe_loss = self.get_model(
             self.config.fe_model,
             self.input_batch_placeholder,
-            self.config.fe_checkpoint,
-            training=True
+            self.config.fe_checkpoint
         )
 
-    def get_model(self, model_name, model_input, checkpoint, training=False):
+    def get_model(self, model_name, model_input, checkpoint):
         """
         Returns a model loaded with checkpoint data. Checkpoint should be something like
         "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"
         """
-        model = FEATURE_EXTRACTOR_MODELS[self.config.fe_model]
-        outputs, layer_features, loss = model(
-            model_input, 
-            # Note: I'm not sure why the seq_lengths matrix has the shape it has, or why training=True.
-            seq_lengths=tf.constant(np.array([self.config.input_samples, self.config.input_samples])),
-            training=training
-        )
         session = tf.Session()
+
         saver = tf.train.import_meta_graph(checkpoint + ".meta") 
-        #saver = tf.train.Saver(var_list=None, max_to_keep=20)
-        print("LOADING CHECKPOINT: {}".format(checkpoint))
+        #saver = tf.train.Saver()
         saver.restore(session, checkpoint)
-        print("TESTING RESTORE:")
-        for op in session.graph.get_operations():
-            print(op.name)
-        print("bn1/beta:0", session.run("bn1/beta:0"))
-        print("layer1/bias:0", session.run("layer1/bias:0"))
+
+
+
+        model = FEATURE_EXTRACTOR_MODELS[self.config.fe_model]
+        with tf.variable_scope(tf.get_variable_scope(), reuse=True):
+            op = session.graph.get_tensor_by_name("bn1/beta:0")
+            print("LOADING DATA FOR bn1/beta:0", session.run(op))
+
+            outputs, layer_features, loss = model(
+                model_input, 
+                seq_lengths=tf.constant([self.config.input_samples]),
+                training=False
+            )
+
+        #saver = tf.train.Saver()
+        #saver.restore(session, checkpoint)
+
+    
         return session, outputs, layer_features, loss
 
     def read_audio(self, filename):
