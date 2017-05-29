@@ -177,8 +177,10 @@ class StyleTransfer():
         print("LOADING CHECKPOINT: {}".format(checkpoint))
         saver.restore(session, checkpoint)
         print("TESTING RESTORE:")
-        print([op.name for op in session.graph.get_operations()])
-        print(session.run("bn1/beta"))
+        for op in session.graph.get_operations():
+            print(op.name)
+        print("bn1/beta", session.run("bn1/beta"))
+        print("layer1/bias", session.run("layer1/bias"))
         return session, outputs, layer_features, loss
 
     def read_audio(self, filename):
