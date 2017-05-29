@@ -179,8 +179,8 @@ class StyleTransfer():
         print("TESTING RESTORE:")
         for op in session.graph.get_operations():
             print(op.name)
-        print("bn1/beta", session.run("bn1/beta"))
-        print("layer1/bias", session.run("layer1/bias"))
+        print("bn1/beta:0", session.run("bn1/beta:0"))
+        print("layer1/bias:0", session.run("layer1/bias:0"))
         return session, outputs, layer_features, loss
 
     def read_audio(self, filename):
