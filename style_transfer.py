@@ -37,12 +37,13 @@ class Config():
     beta = 1                            
     optimizer = "adam"
     learning_rate = 1000.0
-    iterations = 1000
+    iterations = 120
     white_noise_magnitude = 1e-3
     fe_model = "conv_autoencoder_2d"             
     fe_checkpoint = "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"
-    gen_model = "conv_ae_with_loss"                 
-    gen_checkpoint = "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"
+    #gen_model = "conv_ae_with_loss"                 
+    #gen_checkpoint = "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"
+    log_dir = "log"
     
 class StyleTransferError(Exception):
     pass
@@ -57,7 +58,7 @@ class StyleTransfer():
         self.config = config
         self.init_feature_extractor()
 
-    def transfer_style(self, content_filename, style_filename):
+    def transfer_style(self, content_filename, style_filename, log_dir=None):
         """
         Transfers style from `style_filename` onto content from `content_filename`
         by training the input to a model so that its content and style are as close
@@ -70,10 +71,10 @@ class StyleTransfer():
             
         with tf.variable_scope('', reuse=False):
             x = tf.Variable(self.white_noise(), name="x")
+            tf.summary.audio("output", x, content_sr, max_outputs=20)
         with tf.variable_scope('', reuse=True):
             #session, outputs, layer_features, loss = self.get_model(self.config.gen_model,
                     #x, self.config.gen_checkpoint)
-            # This is hacky; it forces us to reuse the same model
             model = FEATURE_EXTRACTOR_MODELS[self.config.fe_model]
             outputs, layer_features, loss = model(x, training=False)
         gen_content_features = layer_features[self.config.content_layer]
@@ -81,23 +82,21 @@ class StyleTransfer():
         content_loss = self.content_loss(source_content_features, gen_content_features)
         style_loss = self.style_loss(source_style_features, gen_style_features)
         loss = self.config.alpha * content_loss + self.config.beta * style_loss
+        tf.summary.scalar("loss", loss)
         optimizer = OPTIMIZERS[self.config.optimizer](self.config.learning_rate)
         train_op = optimizer.minimize(loss, var_list=[x])
+        merged = tf.summary.merge_all()
 
         self.fe_session.run(tf.global_variables_initializer())
-        result = {"loss":[]}
+        writer = tf.summary.FileWriter(log_dir or self.config.log_dir, self.fe_session.graph)
         for i in range(self.config.iterations):
-            _, loss_i = self.fe_session.run((train_op, loss))
-            result["loss"].append(loss_i)
+            _, m, loss_i = self.fe_session.run((train_op, merged, loss))
             print("i: {} of {}; loss = {}".format(i, self.config.iterations, loss_i))
-        result["spectrogram"] = x.eval(session=session).T
-
-        # TODO: this is not really where we want to send this stuff
-        # TODO save spectrogram images
-        self.write_audio("{}.wav".format(self.config.experiment_name), result["spectrogram"], content_sr)
-        with open("{}.json".format(self.config.experiment_name), 'w') as outf:
-            json.dump(result, outf)
-
+            writer.add_summary(m, i)
+            #if i % 5 == 0:
+                #result = x.eval(session=self.fe_session).T
+                #self.write_audio("{}-{}.wav".format(self.config.experiment_name, i), result, content_sr)
+            
     def extract_style_features(self, spectrogram):
         "Feeds a spectrogram into the feature extractor model and returns features for all the style layers"
         return self.fe_session.run(
@@ -211,8 +210,7 @@ class StyleTransfer():
         for i in range(500):
             S = a * np.exp(1j*p)
             x = librosa.istft(S)
-            p = np.angle(librosa.stft(x, N_FFT))
-
+            p = np.angle(librosa.stft(x, self.config.n_fft))
         librosa.output.write_wav(filename, x, sample_rate)
 
     def white_noise(self):
