@@ -25,41 +25,27 @@ class Config():
     for distributed testing.
     """
     experiment_name = "experiment"
-
-    n_fft = 2048                            # STFT window size. See librosa.core.stft docs
-    input_samples = 300                     # Free to change this. 
-    input_channels = 1 + n_fft/2            # Computed. See librosa.core.stft docs on stft return value
-
-    fe_content_layer = 3                    # For feature extraction 
-    fe_style_layers = (                     # For feature extraction
+    n_fft = 2048                            
+    input_samples = 300                     
+    input_channels = 1 + n_fft/2            
+    content_layer = 3                    
+    style_layers = (                    
         (1, 0.5),
         (2, 0.5)
     )
-    fe_model = "conv_autoencoder_2d"             # Feature extractor model name (see FEATURE_EXTRACTOR_MODELS)
-    fe_checkpoint = "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"# Dir for feature extractor checkpoint files
-
-    gen_alpha = 1e-2                        # weight for content loss
-    gen_beta = 1                            # (redundant) weight for style loss
-    gen_optimizer = "adam"
-    gen_learning_rate = 1000.0
-    gen_iterations = 1000
-    gen_initializer = "random"
-    gen_model = "conv_ae_with_loss"                 # Model name (see FEATURE_EXTRACTOR_MODELS)
-    gen_checkpoint = "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"# Dir for feature extractor checkpoint files
-    gen_content_layer = 3                    # For generating the output audio
-    gen_style_layers = (                     # For generating the output audio
-        (1, 0.5),
-        (2, 0.5)
-    )
-
+    alpha = 1e-2                        
+    beta = 1                            
+    optimizer = "adam"
+    learning_rate = 1000.0
+    iterations = 1000
+    white_noise_magnitude = 1e-3
+    fe_model = "conv_autoencoder_2d"             
+    fe_checkpoint = "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"
+    gen_model = "conv_ae_with_loss"                 
+    gen_checkpoint = "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"
     
-def gram(mat, n):
-    "Compute a gram matrix"
-    return  tf.matmul(tf.transpose(mat), mat)  / n
-
 class StyleTransferError(Exception):
     pass
-
 
 class StyleTransfer():
 
@@ -77,44 +63,30 @@ class StyleTransfer():
         by training the input to a model so that its content and style are as close
         to the respective content and style of the sources.
         """
-        result = {"loss":[]}
         content_spectrogram, content_sr = self.read_audio(content_filename)
         style_spectrogram, style_sr = self.read_audio(style_filename)
-        print("CONTENT SPECTRO SHAPE", content_spectrogram.shape)
-        # Save content and style spectrograms
         source_content_features = self.extract_content_features(content_spectrogram)
         source_style_features = self.extract_style_features(style_spectrogram)
-        # Reconstruct and save style and content
-        source_style_grams = [gram(f, self.config.input_samples) for f in source_style_features]
-
-        with tf.variable_scope("input"):
-            if self.config.initializer == "random": # Maybe later we want to change this.
-                init = np.random.randn(1, self.config.input_samples, self.config.input_channels).astype(np.float32)*1e-3
-            x = tf.Variable(init, name="x")
-        with tf.variable_scope(tf.get_variable_scope(), reuse=True):
-            session, outputs, layer_features, loss = self.get_model(
-                self.config.gen_model,
-                x,
-                self.config.gen_checkpoint
-            )
-        gen_content_features = layer_features[self.config.gen_content_layer]
-        content_loss = tf.nn.l2_loss(gen_content_features - source_style_features)
-
-        gen_style_features = [tf.squeeze(layer_features[i], axis[0]) for i, w in self.config.get_style_layers]
-        gen_style_grams = [gram(f, self.config.input_samples) for f in gen_style_features]
-        gen_style_losses = [tf.nn.l2_loss(gen_sg - source_sg) for gen_sg, source_sg in zip(gen_style_grams, source_style_grams)]
-        style_loss = sum([loss * w for loss, (i,w) in zip(gen_style_losses, self.config.gen_style_layers)])
-
-        loss = self.config.gen_alpha * content_loss + self.config.gen_beta * style_loss
-        optimizer = OPTIMIZERS[self.config.gen_optimizer](self.config.learning_rate)
-        q_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "input")
-        grads = optimizer.compute_gradients(loss, var_list=q_vars)
-        train_op = optimizer.apply_gradients(grads)
+            
+        with tf.variable_scope('', reuse=False):
+            x = tf.Variable(self.white_noise(), name="x")
+        with tf.variable_scope('', reuse=True):
+            session, outputs, layer_features, loss = self.get_model(self.config.gen_model,
+                    x, self.config.gen_checkpoint)
+        gen_content_features = layer_features[self.config.content_layer]
+        gen_style_features = [layer_features[i] for i, w in self.config.style_layers]
+        content_loss = self.content_loss(source_content_features, gen_content_features)
+        style_loss = self.style_loss(source_style_features, gen_style_features)
+        loss = self.config.alpha * content_loss + self.config.beta * style_loss
+        optimizer = OPTIMIZERS[self.config.optimizer](self.config.learning_rate)
+        train_op = optimizer.minimize(loss)
 
         session.run(tf.global_variables_initializer())
+        result = {"loss":[]}
         for i in range(self.config.gen_iterations):
             _, loss_i = session.run((train_op, loss))
             result["loss"].append(loss_i)
+            print(loss_i)
         result["spectrogram"] = x.eval(session=session).T
 
         # TODO: this is not really where we want to send this stuff
@@ -126,17 +98,55 @@ class StyleTransfer():
     def extract_style_features(self, spectrogram):
         "Feeds a spectrogram into the feature extractor model and returns features for all the style layers"
         return self.fe_session.run(
-            [self.fe_layer_features[i] for i, w in self.config.fe_style_layers],
+            [self.fe_layer_features[i] for i, w in self.config.style_layers],
             feed_dict={self.input_batch_placeholder: (spectrogram.T,)}
         )
         
     def extract_content_features(self, spectrogram):
         "Feeds a spectrogram into the feature extractor model and returns the content layer's features"
         return self.fe_session.run(
-            self.fe_layer_features[self.config.fe_content_layer],
+            self.fe_layer_features[self.config.content_layer],
             feed_dict={self.input_batch_placeholder: (spectrogram.T,)}
         )
 
+    def content_loss(self, source, generated):
+        "Computes the content loss as the l2 norm of the difference between generated and source"
+        return tf.nn.l2_loss(generated - source)
+
+    def style_loss(self, source, generated):
+        """
+        Given lists of tensors `source` and `generated`, each of size 
+        (batch_size, time_dim, channels_dim, num_filters),
+        computes style loss as the l2 norm of the filter correlations, with a weight on each
+        level's contribution.
+        
+        In the style transfer paper, they do not optimize for a match on values of filters within
+        the style layer(s); they match correlations between average filter values over the image.
+        See (Gatys et al, 2015, p. 10-11)
+        """
+        num_layers, batch_size, time_dim, channels_dim, num_filters = source.shape
+        N = num_filters
+        M = time_dim * channels_dim
+        return sum([
+            tf.nn.l2_loss(self.filter_corrs(g) - self.filter_corrs(s)) * w
+            for g, s, (i, w) in zip(generated, source, self.style_layers)
+        ]) / (2*N**2*M**2)
+
+    def filter_corrs(self, F):
+        """
+        Given a tensor F of size (batch_size, time_dim, channels_dim, num_filters),
+        returns a filter G of size (batch_size, num_filters, num_filters) where G_ij
+        is the (unscaled) correlation between filter i and filter j over the image. 
+        """
+        batch_size, time_dim, channels_dim, num_filters = F.shape.as_list()
+        F_unrolled = tf.reshape(F, (batch_size, time_dim * channels_dim, num_filters))
+        return tf.matmul(F_unrolled, F_unrolled, transpose_a=True)
+
+    # TODO Specify basis for reconstruction. Currently, we just take the autoencoder output. 
+    # but we could also synthesize just style or just content by training the gen autoencoder
+    # on a loss function that only includes style or content loss. This could be helpful for
+    # our paper. 
+    # This process is described on page 10 of the style transfer paper.
     def reconstruct_spectrogram(self, spectrogram):
         "Returns a reconstruction of the spectrogram after passing through the feature extractor autoencoder"
         reconstruction =  self.fe_session.run(
@@ -201,6 +211,14 @@ class StyleTransfer():
             p = np.angle(librosa.stft(x, N_FFT))
 
         librosa.output.write_wav(filename, x, sample_rate)
+
+    def white_noise(self):
+        """
+        Constructs an array of white noise with which to initialize the input variable
+        This noise will be transformed into the output audio.
+        """
+        shape = (1, self.config.input_samples, self.config.input_channels)
+        return np.random.randn(*shape).astype(np.float32) * self.config.white_noise_magnitude
 
 
 
