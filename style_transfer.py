@@ -192,7 +192,8 @@ class StyleTransfer():
         x, sample_rate = librosa.load(filename)
         S = librosa.stft(x, self.config.n_fft)
         p = np.angle(S)
-        S = np.log1p(np.abs(S[:,:self.config.input_samples]))  
+        S = np.log1p(np.abs(S[:,:self.config.input_samples]))  # Does it seem weird to be throwing away
+                                                               # phase sign information?
         required_padding = max(0, self.config.input_samples - S.shape[1])
         S = np.pad(S, ((0,0), (0, required_padding)), "constant")
         return np.array(S), sample_rate

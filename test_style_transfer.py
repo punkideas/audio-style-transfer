@@ -1,7 +1,7 @@
 from style_transfer import Config, StyleTransfer
 
-content_file = "inputs/VCTK-Corpus/wav48/p241/p241_003.wav"
-style_file = "inputs/VCTK-Corpus/wav48/p225/p225_002.wav"
+content_file = "inputs/test/content.wav"
+style_file = "/inputs/test/style.wav"
 config = Config()
 config.experiment_name = "first-test"
 
