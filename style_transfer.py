@@ -71,22 +71,25 @@ class StyleTransfer():
         with tf.variable_scope('', reuse=False):
             x = tf.Variable(self.white_noise(), name="x")
         with tf.variable_scope('', reuse=True):
-            session, outputs, layer_features, loss = self.get_model(self.config.gen_model,
-                    x, self.config.gen_checkpoint)
+            #session, outputs, layer_features, loss = self.get_model(self.config.gen_model,
+                    #x, self.config.gen_checkpoint)
+            # This is hacky; it forces us to reuse the same model
+            model = FEATURE_EXTRACTOR_MODELS[self.config.fe_model]
+            outputs, layer_features, loss = model(x, training=False)
         gen_content_features = layer_features[self.config.content_layer]
         gen_style_features = [layer_features[i] for i, w in self.config.style_layers]
         content_loss = self.content_loss(source_content_features, gen_content_features)
         style_loss = self.style_loss(source_style_features, gen_style_features)
         loss = self.config.alpha * content_loss + self.config.beta * style_loss
         optimizer = OPTIMIZERS[self.config.optimizer](self.config.learning_rate)
-        train_op = optimizer.minimize(loss)
+        train_op = optimizer.minimize(loss, var_list=[x])
 
-        session.run(tf.global_variables_initializer())
+        self.fe_session.run(tf.global_variables_initializer())
         result = {"loss":[]}
-        for i in range(self.config.gen_iterations):
-            _, loss_i = session.run((train_op, loss))
+        for i in range(self.config.iterations):
+            _, loss_i = self.fe_session.run((train_op, loss))
             result["loss"].append(loss_i)
-            print(loss_i)
+            print("i: {} of {}; loss = {}".format(i, self.config.iterations, loss_i))
         result["spectrogram"] = x.eval(session=session).T
 
         # TODO: this is not really where we want to send this stuff
@@ -124,12 +127,12 @@ class StyleTransfer():
         the style layer(s); they match correlations between average filter values over the image.
         See (Gatys et al, 2015, p. 10-11)
         """
-        num_layers, batch_size, time_dim, channels_dim, num_filters = source.shape
+        batch_size, time_dim, channels_dim, num_filters = source[0].shape
         N = num_filters
         M = time_dim * channels_dim
         return sum([
             tf.nn.l2_loss(self.filter_corrs(g) - self.filter_corrs(s)) * w
-            for g, s, (i, w) in zip(generated, source, self.style_layers)
+            for g, s, (i, w) in zip(generated, source, self.config.style_layers)
         ]) / (2*N**2*M**2)
 
     def filter_corrs(self, F):
@@ -138,7 +141,7 @@ class StyleTransfer():
         returns a filter G of size (batch_size, num_filters, num_filters) where G_ij
         is the (unscaled) correlation between filter i and filter j over the image. 
         """
-        batch_size, time_dim, channels_dim, num_filters = F.shape.as_list()
+        batch_size, time_dim, channels_dim, num_filters = [int(d) for d in F.shape]
         F_unrolled = tf.reshape(F, (batch_size, time_dim * channels_dim, num_filters))
         return tf.matmul(F_unrolled, F_unrolled, transpose_a=True)
 
