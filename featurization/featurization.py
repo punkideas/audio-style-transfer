@@ -40,6 +40,8 @@ def save_spectrogram_as_audio(spectrogram, fs, path):
     spectrogram shape is: (time, channels)
     """
     as_audio = invert_spectrogram(spectrogram, fs)
+    if np.any(np.isnan(as_audio)) or np.any(np.isinf(as_audio)):
+        raise Exception("Failed to convert to audio")
     librosa.output.write_wav(path, as_audio, fs)
  
 def fit_time_dim_to_size(x, size):
