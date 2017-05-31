@@ -44,6 +44,7 @@ class Config():
     #gen_model = "conv_ae_with_loss"                 
     #gen_checkpoint = "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"
     log_dir = "log"
+    results_dir = "results"
     
 class StyleTransferError(Exception):
     pass
@@ -93,9 +94,13 @@ class StyleTransfer():
             _, m, loss_i = self.fe_session.run((train_op, merged, loss))
             print("i: {} of {}; loss = {}".format(i, self.config.iterations, loss_i))
             writer.add_summary(m, i)
-            #if i % 5 == 0:
-                #result = x.eval(session=self.fe_session).T
-                #self.write_audio("{}-{}.wav".format(self.config.experiment_name, i), result, content_sr)
+            if i % 5 == 0:
+                result = x.eval(session=self.fe_session)
+                npfile = os.path.join(self.config.results_dir, 
+                        "{}-{}.npy".format(self.config.experiment_name, i))
+                np.save(npfile, result)
+                audiofile = os.path.join("{}-{}.wav".format(self.config.experiment_name, i))
+                self.write_audio(audiofile, result, content_sr)
             
     def extract_style_features(self, spectrogram):
         "Feeds a spectrogram into the feature extractor model and returns features for all the style layers"
@@ -203,8 +208,13 @@ class StyleTransfer():
         Reconstructs phase from spectrogram and writes the resulting audio to a file.
         Ensure that spectrograms passed in here have the correct orientation.
         """
-        a = np.zeros_like(spectrogram)
-        a[:self.config.input_channels,:] = np.exp(spectrogram[1]) - 1
+        #a = np.zeros_like(spectrogram)
+        #a[:self.config.input_channels,:] = np.exp(spectrogram[1]) - 1
+        a = np.exp(spectrogram.T[:,:,0]) - 1
+
+        if np.any(a[a == np.inf]):
+            print(" - warning: some output values reached infinity. Setting them to 0.")
+            a[a == np.inf] = 0
 
         # This code is supposed to do phase reconstruction
         p = 2 * np.pi * np.random.random_sample(a.shape) - np.pi
