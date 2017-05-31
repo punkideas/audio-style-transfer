@@ -16,7 +16,11 @@ FEATURE_EXTRACTOR_MODELS = {
 }
 
 OPTIMIZERS = {
-    "adam": tf.train.AdamOptimizer
+    "sgd": tf.train.GradientDescentOptimizer,
+    "momentum": lambda x: tf.train.MomentumOptimizer(x, 0.85),
+    "adam": tf.train.AdamOptimizer,
+    "adam_0.1_0.111": lambda x: tf.train.AdamOptimizer(x, beta1=0.1, beta2=0.111),
+    "adam_0_0.111": lambda x: tf.train.AdamOptimizer(x, beta1=0.0, beta2=0.111)
 }
 
 class Config():
@@ -34,7 +38,8 @@ class Config():
         (2, 0.5)
     )
     alpha = 1e-2                        
-    beta = 1                            
+    beta = 1
+    reg = 3e-4                            
     optimizer = "adam"
     learning_rate = 1000.0
     iterations = 120
@@ -44,6 +49,7 @@ class Config():
     #gen_model = "conv_ae_with_loss"                 
     #gen_checkpoint = "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"
     log_dir = "log"
+    start_with_content = False
     
 class StyleTransferError(Exception):
     pass
@@ -69,9 +75,16 @@ class StyleTransfer():
         source_content_features = self.extract_content_features(content_spectrogram)
         source_style_features = self.extract_style_features(style_spectrogram)
             
+        print("Beginning style transfer")
+
         with tf.variable_scope('', reuse=False):
-            x = tf.Variable(self.white_noise(), name="x")
+            if self.config.start_with_content:
+                x = tf.Variable(np.expand_dims(content_spectrogram.T, axis=0), name="x")
+            else:
+                x = tf.Variable(self.white_noise(), name="x")
             tf.summary.audio("output", x, content_sr, max_outputs=20)
+        assert_not_nan_op = tf.reduce_any(tf.is_nan(x))
+
         with tf.variable_scope('', reuse=True):
             #session, outputs, layer_features, loss = self.get_model(self.config.gen_model,
                     #x, self.config.gen_checkpoint)
@@ -81,14 +94,17 @@ class StyleTransfer():
         gen_style_features = [layer_features[i] for i, w in self.config.style_layers]
         content_loss = self.content_loss(source_content_features, gen_content_features)
         style_loss = self.style_loss(source_style_features, gen_style_features)
-        loss = self.config.alpha * content_loss + self.config.beta * style_loss
+        reg_loss = tf.nn.l2_loss(x)
+        loss = self.config.alpha * content_loss + self.config.beta * style_loss + self.config.reg * reg_loss
         tf.summary.scalar("loss", loss)
         optimizer = OPTIMIZERS[self.config.optimizer](self.config.learning_rate)
-        train_op = optimizer.minimize(loss, var_list=[x])
+        with tf.control_dependencies([assert_not_nan_op]):
+            train_op = optimizer.minimize(loss, var_list=[x])
         merged = tf.summary.merge_all()
 
         self.fe_session.run(tf.global_variables_initializer())
         writer = tf.summary.FileWriter(log_dir or self.config.log_dir, self.fe_session.graph)
+        print("Starting first iteration")
         for i in range(self.config.iterations):
             _, m, loss_i = self.fe_session.run((train_op, merged, loss))
             print("i: {} of {}; loss = {}".format(i, self.config.iterations, loss_i))
@@ -96,6 +112,7 @@ class StyleTransfer():
             #if i % 5 == 0:
                 #result = x.eval(session=self.fe_session).T
                 #self.write_audio("{}-{}.wav".format(self.config.experiment_name, i), result, content_sr)
+        return self.fe_session.run(x)[0, :, :].T, content_sr
             
     def extract_style_features(self, spectrogram):
         "Feeds a spectrogram into the feature extractor model and returns features for all the style layers"
@@ -162,6 +179,7 @@ class StyleTransfer():
         Instantiates the specified model with a specified checkpoint file. This only needs to happen on __init__, 
         so TF objects are stored as properties for reuse.
         """
+        print("Initializaing style transfer")
         self.input_batch_placeholder = tf.placeholder(
             tf.float32, name="input_batch",
             shape=(1, self.config.input_samples, self.config.input_channels), 
@@ -192,6 +210,7 @@ class StyleTransfer():
         x, sample_rate = librosa.load(filename)
         S = librosa.stft(x, self.config.n_fft)
         p = np.angle(S)
+        print(filename, " had length: ", S.shape[1])
         S = np.log1p(np.abs(S[:,:self.config.input_samples]))  # Does it seem weird to be throwing away
                                                                # phase sign information?
         required_padding = max(0, self.config.input_samples - S.shape[1])
