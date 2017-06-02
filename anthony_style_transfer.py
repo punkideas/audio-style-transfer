@@ -4,6 +4,7 @@ import numpy as np
 
 content_file = "inputs/vctk_corpus/VCTK-Corpus/wav48/val/p300/p300_024.wav"
 style_file = "inputs/vctk_corpus/VCTK-Corpus/wav48/train/p228/p228_044.wav"
+#style_file = "inputs/vctk_corpus/VCTK-Corpus/wav48/train/p225/p225_003.wav"
 config = Config()
 config.experiment_name = "anthony-st"
 config.fe_checkpoint  = "saved_checkpoints/overfit_on_p228_2d_conv_ae2d_conv_ae/overfit_on_p228_2d_conv_ae2d_conv_ae/hyperspectral_resnet.model-519"
@@ -18,8 +19,8 @@ config.content_layer = 0
 config.style_layers = (
         #(0, 5e-2), # Just first layer
         #(1, 1e-9), # Just 2nd layer
-        (0, 1.5e-2), # Both first and 2nd layer
-        (1, 5e-10),
+        (0, 3e-2), # Both first and 2nd layer
+        (1, 1e-9),
     )
 config.reg = 0.0
 config.alpha = 1.45e-11
