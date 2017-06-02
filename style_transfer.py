@@ -129,6 +129,10 @@ class StyleTransfer():
             _, m, loss_i = self.fe_session.run((train_op, merged, loss), feed_dict={lr: learning_rate})
             print("i: {} of {}; loss = {}".format(i, self.config.iterations, loss_i))
             writer.add_summary(m, i)
+            
+            if i < self.config.decay_iteration:
+                self.fe_session.run(clamp_op)
+            
             if i > 10 and i % 10 == 0:
                 result = x.eval(session=self.fe_session)
                 npfile = os.path.join(self.config.results_dir, 
