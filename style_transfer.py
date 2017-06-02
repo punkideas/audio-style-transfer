@@ -37,11 +37,14 @@ class Config():
         (1, 0.5),
         (2, 0.5)
     )
+    clip = False     
     alpha = 1e-2                        
     beta = 1
     reg = 3e-4                            
     optimizer = "adam"
-    learning_rate = 1000.0
+    learning_rate = 100.0
+    decay_iteration = 100   # Which iteration should the decayed rate kick in at?
+    decayed_learning_rate = 3
     iterations = 120
     white_noise_magnitude = 1e-3
     fe_model = "conv_autoencoder_2d"             
@@ -112,7 +115,8 @@ class StyleTransfer():
         reg_loss = tf.nn.l2_loss(x)
         loss = self.config.alpha * content_loss + self.config.beta * style_loss + self.config.reg * reg_loss
         tf.summary.scalar("loss", loss)
-        optimizer = OPTIMIZERS[self.config.optimizer](self.config.learning_rate)
+        lr = tf.placeholder(tf.float32, name="learning_rate", shape=())
+        optimizer = OPTIMIZERS[self.config.optimizer](lr)
         with tf.control_dependencies([assert_not_nan_op]):
             train_op = optimizer.minimize(loss, var_list=[x])
         merged = tf.summary.merge_all()
@@ -121,7 +125,8 @@ class StyleTransfer():
         writer = tf.summary.FileWriter(log_dir or self.config.log_dir, self.fe_session.graph)
         print("Starting first iteration")
         for i in range(self.config.iterations):
-            _, m, loss_i = self.fe_session.run((train_op, merged, loss))
+            learning_rate = self.config.learning_rate if i < self.config.decay_iteration else self.config.decayed_learning_rate
+            _, m, loss_i = self.fe_session.run((train_op, merged, loss), feed_dict={lr: learning_rate})
             print("i: {} of {}; loss = {}".format(i, self.config.iterations, loss_i))
             writer.add_summary(m, i)
             if i > 10 and i % 10 == 0:
