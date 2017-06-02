@@ -1,0 +1,7 @@
+1) It seems that our inability to do style transfer is an optimization issue.  When we use the output of the first layer, we are easily able to get something that sounds like the original input.  But as the content layer rises in the network, our results get worse.  - I wonder if this could be because of the relus - since they cause things to be set to zero.
+
+2)  It seems that the content and style loss were massively different, making them about the same size seems to help.  In fact, it seems that the content loss should be slighty smaller than the style loss for best results in terms of actually transfering the style.  If the content loss is too big, you just get back the content.  Note that since the content loss depends on the size of the inputs, if the length of the inputs changes then the weights (specifically alpha) will also have to change.
+
+3)  Changing which layers correspond you use for the style loss have massively different magnitudes of their style loss value.  Make sure you weight each layer so that all the losses are on the same scale.
+
+4)  Let the training go on for the full 200 iterations, sometimes after 100 iterations, the optimization suddenly starts working much better
