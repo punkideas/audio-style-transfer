@@ -16,14 +16,14 @@ config.start_with_content = True
 config.input_samples = 188
 config.content_layer = 0
 config.style_layers = (
-        #(0, 1.0),
-        (1, 1e-9),
-        #(0, 0.5),
-        #(1, 0.5)
+        #(0, 5e-2), # Just first layer
+        #(1, 1e-9), # Just 2nd layer
+        (0, 1.5e-2), # Both first and 2nd layer
+        (1, 5e-10),
     )
 config.reg = 0.0
 config.alpha = 1.45e-11
-config.channels_as_filters = True
+config.channels_as_filters = False
 
 st = StyleTransfer(config)
 out, out_sr = st.transfer_style(content_file, style_file)
