@@ -161,7 +161,7 @@ class StyleTransfer():
             if self.config.clip and i < self.config.decay_iteration:
                 self.fe_session.run(clamp_op)
             
-            if i > 10 and i % 121 == 0:
+            if i > 10 and i % 211 == 0:
                 result = x.eval(session=self.fe_session)
                 npfile = os.path.join(self.config.results_dir, 
                         "{}-{}.npy".format(self.config.experiment_name, i))

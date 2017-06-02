@@ -7,8 +7,8 @@ style_file = "inputs/vctk_corpus/VCTK-Corpus/wav48/train/p228/p228_044.wav"
 config = Config()
 config.experiment_name = "anthony-st"
 config.fe_checkpoint  = "saved_checkpoints/overfit_on_p228_2d_conv_ae2d_conv_ae/overfit_on_p228_2d_conv_ae2d_conv_ae/hyperspectral_resnet.model-519"
-config.iterations = 80
-config.decay_iteration = 60
+config.iterations = 200
+config.decay_iteration = 180
 config.optimizer = "adam"
 config.learning_rate = 1.0
 config.decayed_learning_rate = 0.0333
@@ -21,7 +21,7 @@ config.style_layers = (
         #(1, 0.5)
     )
 config.reg = 0.0
-config.alpha = 1e-10
+config.alpha = 1.45e-11
 
 st = StyleTransfer(config)
 out, out_sr = st.transfer_style(content_file, style_file)
