@@ -51,6 +51,7 @@ class Config():
     log_dir = "log"
     results_dir = "results"
     start_with_content = False
+    clip = True
     
 class StyleTransferError(Exception):
     pass
@@ -74,7 +75,7 @@ class StyleTransfer():
         content_spectrogram, content_sr = self.read_audio(content_filename)
         style_spectrogram, style_sr = self.read_audio(style_filename)
         source_content_features = self.extract_content_features(content_spectrogram)
-        source_style_features = self.extract_style_features(style_spectrogram)
+        source_style_features = self.extract_style_features(style_spectrogram)            
             
         print("Beginning style transfer")
 
@@ -84,7 +85,20 @@ class StyleTransfer():
             else:
                 x = tf.Variable(self.white_noise(), name="x")
             tf.summary.audio("output", x, content_sr, max_outputs=20)
-        assert_not_nan_op = tf.reduce_any(tf.is_nan(x))
+        assert_not_nan_op = tf.reduce_any(tf.is_nan(x))       
+        
+        if self.config.clip:
+            time_concatenated_input = np.concatenate((content_spectrogram, style_spectrogram), axis=1)
+            channel_means = time_concatenated_input.mean(axis=1, keepdims=True)
+            channel_std = time_concatenated_input.std(axis=1, keepdims=True)
+            
+            time_dim = content_spectrogram.shape[1]
+            channel_left_clip = np.tile(channel_means - 1.5 * channel_std, (1, time_dim))
+            channel_right_clip = np.tile(channel_means + 1.5 * channel_std, (1, time_dim))
+            
+            channel_left_clip = np.expand_dims(channel_left_clip.T, axis=0)
+            channel_right_clip = np.expand_dims(channel_right_clip.T, axis=0)
+            clamp_op = tf.assign(x, tf.clip_by_value(x, channel_left_clip, channel_right_clip))
 
         with tf.variable_scope('', reuse=True):
             #session, outputs, layer_features, loss = self.get_model(self.config.gen_model,
