@@ -110,7 +110,7 @@ class StyleTransfer():
             _, m, loss_i = self.fe_session.run((train_op, merged, loss))
             print("i: {} of {}; loss = {}".format(i, self.config.iterations, loss_i))
             writer.add_summary(m, i)
-            if i % 5 == 0:
+            if i > 10 and i % 10 == 0:
                 result = x.eval(session=self.fe_session)
                 npfile = os.path.join(self.config.results_dir, 
                         "{}-{}.npy".format(self.config.experiment_name, i))
@@ -229,19 +229,22 @@ class StyleTransfer():
         """
         #a = np.zeros_like(spectrogram)
         #a[:self.config.input_channels,:] = np.exp(spectrogram[1]) - 1
-        a = np.exp(spectrogram.T[:,:,0]) - 1
+        a = np.exp(spectrogram[0].T) - 1
 
         if np.any(a[a == np.inf]):
             print(" - warning: some output values reached infinity. Setting them to 0.")
             a[a == np.inf] = 0
 
-        # This code is supposed to do phase reconstruction
-        p = 2 * np.pi * np.random.random_sample(a.shape) - np.pi
-        for i in range(500):
-            S = a * np.exp(1j*p)
-            x = librosa.istft(S)
-            p = np.angle(librosa.stft(x, self.config.n_fft))
-        librosa.output.write_wav(filename, x, sample_rate)
+        try:
+            # This code is supposed to do phase reconstruction
+            p = 2 * np.pi * np.random.random_sample(a.shape) - np.pi
+            for i in range(500):
+                S = a * np.exp(1j*p)
+                x = librosa.istft(S)
+                p = np.angle(librosa.stft(x, self.config.n_fft))
+            librosa.output.write_wav(filename, x, sample_rate)
+        except librosa.util.exceptions.ParameterError:
+            print(" * Could not write audio for {}; some params were infinite".format(filename))
 
     def white_noise(self):
         """

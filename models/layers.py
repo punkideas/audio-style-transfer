@@ -142,7 +142,7 @@ def bn(x, training, name=None):
 	training=training,
 	trainable=True,
 	name=name,
-	reuse=None)   
+	reuse=tf.get_variable_scope().reuse)   
 
 def leaky_relu(x, alpha = 0.01):
     return tf.maximum(x, alpha * x)
