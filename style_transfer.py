@@ -76,6 +76,10 @@ class StyleTransfer():
         by training the input to a model so that its content and style are as close
         to the respective content and style of the sources.
         """
+
+        if not os.path.exists(self.config.results_dir):
+            os.makedirs(self.config.results_dir)
+
         content_spectrogram, content_sr = self.read_audio(content_filename)
         style_spectrogram, style_sr = self.read_audio(style_filename)
         source_content_features = self.extract_content_features(content_spectrogram)
@@ -91,18 +95,30 @@ class StyleTransfer():
             tf.summary.audio("output", x, content_sr, max_outputs=20)
         assert_not_nan_op = tf.reduce_any(tf.is_nan(x))       
         
-        if self.config.clip:
-            time_concatenated_input = np.concatenate((content_spectrogram, style_spectrogram), axis=1)
-            channel_means = time_concatenated_input.mean(axis=1, keepdims=True)
-            channel_std = time_concatenated_input.std(axis=1, keepdims=True)
-            
-            time_dim = content_spectrogram.shape[1]
-            channel_left_clip = np.tile(channel_means - 1.5 * channel_std, (1, time_dim))
-            channel_right_clip = np.tile(channel_means + 1.5 * channel_std, (1, time_dim))
-            
-            channel_left_clip = np.expand_dims(channel_left_clip.T, axis=0)
-            channel_right_clip = np.expand_dims(channel_right_clip.T, axis=0)
-            clamp_op = tf.assign(x, tf.clip_by_value(x, channel_left_clip, channel_right_clip))
+	time_concatenated_input = np.concatenate((content_spectrogram, style_spectrogram), axis=1)
+	channel_means = time_concatenated_input.mean(axis=1, keepdims=True)
+	channel_std = time_concatenated_input.std(axis=1, keepdims=True)
+
+        print("Min: ", time_concatenated_input.min(), " Max: ", time_concatenated_input.max())	
+        print("Mean: ", time_concatenated_input.mean(), " std: ", time_concatenated_input.std())
+	print("Fraction of exactly zero")
+	print(np.sum(time_concatenated_input == 0) / float(np.prod(time_concatenated_input.shape)))
+	print("Channel means")
+	print(channel_means)
+	print("Channel std")
+	print(channel_std)
+
+	time_dim = content_spectrogram.shape[1]
+	channel_left_clip = np.tile(channel_means - 1.5 * channel_std, (1, time_dim))
+	channel_right_clip = np.tile(channel_means + 1.5 * channel_std, (1, time_dim))
+	
+	channel_left_clip = np.expand_dims(channel_left_clip.T, axis=0)
+	channel_right_clip = np.expand_dims(channel_right_clip.T, axis=0)
+
+	channel_left_clip = -30
+	channel_right_clip = 30
+
+	clamp_op = tf.assign(x, tf.clip_by_value(x, channel_left_clip, channel_right_clip))
 
         with tf.variable_scope('', reuse=True):
             #session, outputs, layer_features, loss = self.get_model(self.config.gen_model,
@@ -137,12 +153,13 @@ class StyleTransfer():
             if self.config.clip and i < self.config.decay_iteration:
                 self.fe_session.run(clamp_op)
             
-            if i > 10 and i % 10 == 0:
+            if i > 10 and i % 40 == 0:
                 result = x.eval(session=self.fe_session)
                 npfile = os.path.join(self.config.results_dir, 
                         "{}-{}.npy".format(self.config.experiment_name, i))
                 np.save(npfile, result)
-                audiofile = os.path.join("{}-{}.wav".format(self.config.experiment_name, i))
+                audiofile = os.path.join(self.config.results_dir, \
+                                "{}-{}.wav".format(self.config.experiment_name, i))
                 self.write_audio(audiofile, result, content_sr)
         return self.fe_session.run(x)[0, :, :].T, content_sr
             
