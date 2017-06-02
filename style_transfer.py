@@ -128,14 +128,21 @@ class StyleTransfer():
             outputs, layer_features, loss = model(x, training=False)
         gen_content_features = layer_features[self.config.content_layer]
         gen_style_features = [layer_features[i] for i, w in self.config.style_layers]
+
         content_loss = self.content_loss(source_content_features, gen_content_features)
-        tf.summary.scalar("content_loss", self.config.alpha * content_loss)
         style_loss = self.style_loss(source_style_features, gen_style_features)
-        tf.summary.scalar("style_loss", self.config.beta * style_loss)
         reg_loss = tf.nn.l2_loss(x)        
-        tf.summary.scalar("reg_loss", self.config.reg * reg_loss)
-        loss = self.config.alpha * content_loss + self.config.beta * style_loss + self.config.reg * reg_loss
+
+        content_loss *= self.config.alpha
+        style_loss *= self.config.beta
+        reg_loss *= self.config.reg
+        loss = content_loss + style_loss + reg_loss
+
         tf.summary.scalar("loss", loss)
+        tf.summary.scalar("content_loss", self.config.alpha * content_loss)
+        tf.summary.scalar("style_loss", self.config.beta * style_loss)
+        tf.summary.scalar("reg_loss", self.config.reg * reg_loss)
+
         lr = tf.placeholder(tf.float32, name="learning_rate", shape=())
         optimizer = OPTIMIZERS[self.config.optimizer](lr)
         with tf.control_dependencies([assert_not_nan_op]):
@@ -147,8 +154,8 @@ class StyleTransfer():
         print("Starting first iteration")
         for i in range(self.config.iterations):
             learning_rate = self.config.learning_rate if i < self.config.decay_iteration else self.config.decayed_learning_rate
-            _, m, loss_i = self.fe_session.run((train_op, merged, loss), feed_dict={lr: learning_rate})
-            print("i: {} of {}; loss = {}".format(i, self.config.iterations, loss_i))
+            _, m, loss_i, style_loss_i, content_loss_i = self.fe_session.run((train_op, merged, loss, style_loss, content_loss), feed_dict={lr: learning_rate})
+            print("i: {} of {}; loss = {} (style: {} ; content: {})".format(i, self.config.iterations, loss_i, style_loss_i, content_loss_i))
             writer.add_summary(m, i)
             
             if self.config.clip and i < self.config.decay_iteration:

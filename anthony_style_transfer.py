@@ -21,7 +21,7 @@ config.style_layers = (
         #(1, 0.5)
     )
 config.reg = 0.0
-config.alpha = 1e-3
+config.alpha = 1e-10
 
 st = StyleTransfer(config)
 out, out_sr = st.transfer_style(content_file, style_file)
