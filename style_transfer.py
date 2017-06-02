@@ -107,6 +107,7 @@ class StyleTransfer():
 	print(channel_means)
 	print("Channel std")
 	print(channel_std)
+        print("Min std: ", channel_std.min(), " Max std: ", channel_std.max())
 
 	time_dim = content_spectrogram.shape[1]
 	channel_left_clip = np.tile(channel_means - 1.5 * channel_std, (1, time_dim))
@@ -115,8 +116,8 @@ class StyleTransfer():
 	channel_left_clip = np.expand_dims(channel_left_clip.T, axis=0)
 	channel_right_clip = np.expand_dims(channel_right_clip.T, axis=0)
 
-	channel_left_clip = -30
-	channel_right_clip = 30
+	channel_left_clip = time_concatenated_input.min()
+	channel_right_clip = time_concatenated_input.max()
 
 	clamp_op = tf.assign(x, tf.clip_by_value(x, channel_left_clip, channel_right_clip))
 
