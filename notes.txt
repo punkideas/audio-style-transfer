@@ -32,3 +32,5 @@ config.alpha = 1.45e-13
 
 
 6)  I think pushing the content layer higher will be the key for good style transfer, because the lower the content layer is, the more the model is punished for deviating from the content audio.
+
+7)  In the blog we based our work off, their "channels" for style transfer are the spectro gram channels whereas ours are not, maybe we should implement something like that (I've tried but its not exactly the same")
