@@ -11,17 +11,19 @@ config.iterations = 200
 config.decay_iteration = 180
 config.optimizer = "adam"
 config.learning_rate = 1.0
-config.decayed_learning_rate = 0.0333
-config.start_with_content = False
+config.decayed_learning_rate = .03333
+config.start_with_content = True
 config.input_samples = 188
 config.content_layer = 0
 config.style_layers = (
-        (0, 1.0),
+        #(0, 1.0),
+        (1, 1e-9),
         #(0, 0.5),
         #(1, 0.5)
     )
 config.reg = 0.0
 config.alpha = 1.45e-11
+config.channels_as_filters = True
 
 st = StyleTransfer(config)
 out, out_sr = st.transfer_style(content_file, style_file)

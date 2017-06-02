@@ -16,6 +16,7 @@ FEATURE_EXTRACTOR_MODELS = {
 }
 
 OPTIMIZERS = {
+    "rmsprop": tf.train.RMSPropOptimizer,
     "sgd": tf.train.GradientDescentOptimizer,
     "momentum": lambda x: tf.train.MomentumOptimizer(x, 0.85),
     "adam": tf.train.AdamOptimizer,
@@ -54,6 +55,7 @@ class Config():
     results_dir = "results"
     start_with_content = True
     clip = True
+    channels_as_filters = False
     audio_source_is_default = True
     note = "<No Note.>"
     
@@ -130,7 +132,7 @@ class StyleTransfer():
         gen_style_features = [layer_features[i] for i, w in self.config.style_layers]
 
         content_loss = self.content_loss(source_content_features, gen_content_features)
-        style_loss = self.style_loss(source_style_features, gen_style_features)
+        style_loss = self.style_loss(source_style_features, gen_style_features, channels_as_filters = self.config.channels_as_filters)
         reg_loss = tf.nn.l2_loss(x)        
 
         content_loss *= self.config.alpha
@@ -146,16 +148,23 @@ class StyleTransfer():
         lr = tf.placeholder(tf.float32, name="learning_rate", shape=())
         optimizer = OPTIMIZERS[self.config.optimizer](lr)
         with tf.control_dependencies([assert_not_nan_op]):
+            grads_and_vars = optimizer.compute_gradients(loss, var_list=[x])
+            max_grad = tf.reduce_max(tf.abs(grads_and_vars[0][0]))
             train_op = optimizer.minimize(loss, var_list=[x])
         merged = tf.summary.merge_all()
 
         self.fe_session.run(tf.global_variables_initializer())
+        print("Before training, content loss: ", self.fe_session.run(content_loss))
+        print("If you start with the content style, shouldn't this be zero?")
+        print("Before training, style loss: ", self.fe_session.run(style_loss))
+
         writer = tf.summary.FileWriter(log_dir or self.config.log_dir, self.fe_session.graph)
         print("Starting first iteration")
         for i in range(self.config.iterations):
             learning_rate = self.config.learning_rate if i < self.config.decay_iteration else self.config.decayed_learning_rate
-            _, m, loss_i, style_loss_i, content_loss_i = self.fe_session.run((train_op, merged, loss, style_loss, content_loss), feed_dict={lr: learning_rate})
-            print("i: {} of {}; loss = {} (style: {} ; content: {})".format(i, self.config.iterations, loss_i, style_loss_i, content_loss_i))
+            _, m, loss_i, style_loss_i, content_loss_i, max_grad_i = self.fe_session.run((train_op, merged, loss, style_loss, content_loss, max_grad), feed_dict={lr: learning_rate})
+            print("i: {} of {}; loss = {} (style: {} ; content: {}), max_grad: {}".format(i, self.config.iterations, \
+                     loss_i, style_loss_i, content_loss_i, max_grad_i))
             writer.add_summary(m, i)
             
             if self.config.clip and i < self.config.decay_iteration:
@@ -189,7 +198,7 @@ class StyleTransfer():
         "Computes the content loss as the l2 norm of the difference between generated and source"
         return tf.nn.l2_loss(generated - source)
 
-    def style_loss(self, source, generated):
+    def style_loss(self, source, generated, channels_as_filters=False):
         """
         Given lists of tensors `source` and `generated`, each of size 
         (batch_size, time_dim, channels_dim, num_filters),
@@ -200,6 +209,24 @@ class StyleTransfer():
         the style layer(s); they match correlations between average filter values over the image.
         See (Gatys et al, 2015, p. 10-11)
         """
+        if channels_as_filters:
+	    loss = 0.0
+	    for g, s, (i, w) in zip(generated, source, self.config.style_layers):
+		batch_size, time_dim, channels_dim, num_filters = s.shape
+		N = channels_dim
+		M = time_dim
+		loss += tf.nn.l2_loss(self.filter_corrs(g, True) - self.filter_corrs(s, True)) * w / (2*N**2*M**2)
+	    return loss
+
+        loss = 0.0
+        for g, s, (i, w) in zip(generated, source, self.config.style_layers):
+            batch_size, time_dim, channels_dim, num_filters = s.shape
+            N = num_filters
+            M = time_dim * channels_dim
+            loss += tf.nn.l2_loss(self.filter_corrs(g) - self.filter_corrs(s)) * w / (2*N**2*M**2)
+        return loss
+
+        """
         batch_size, time_dim, channels_dim, num_filters = source[0].shape
         N = num_filters
         M = time_dim * channels_dim
@@ -207,15 +234,21 @@ class StyleTransfer():
             tf.nn.l2_loss(self.filter_corrs(g) - self.filter_corrs(s)) * w
             for g, s, (i, w) in zip(generated, source, self.config.style_layers)
         ]) / (2*N**2*M**2)
+        """
 
-    def filter_corrs(self, F):
+    def filter_corrs(self, F, channels_as_filters=False):
         """
         Given a tensor F of size (batch_size, time_dim, channels_dim, num_filters),
         returns a filter G of size (batch_size, num_filters, num_filters) where G_ij
         is the (unscaled) correlation between filter i and filter j over the image. 
         """
         batch_size, time_dim, channels_dim, num_filters = [int(d) for d in F.shape]
-        F_unrolled = tf.reshape(F, (batch_size, time_dim * channels_dim, num_filters))
+        if channels_as_filters:
+            # F_unrolled = tf.reshape(F, (batch_size, time_dim, channels_dim * num_filters))  This would be best, but is intractable
+            # F_unrolled = tf.reduce_mean(F, axis=3)
+            F_unrolled = tf.reduce_max(F, axis=3)
+        else:
+            F_unrolled = tf.reshape(F, (batch_size, time_dim * channels_dim, num_filters))
         return tf.matmul(F_unrolled, F_unrolled, transpose_a=True)
 
     # TODO Specify basis for reconstruction. Currently, we just take the autoencoder output. 
