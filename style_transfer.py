@@ -36,15 +36,14 @@ class Config():
     style_layers = (                    
         (1, 0.5),
         (2, 0.5)
-    )
-    clip = False     
+    )    
     alpha = 1e-2                        
     beta = 1
     reg = 3e-4                            
     optimizer = "adam"
-    learning_rate = 100.0
+    learning_rate = 10.0
     decay_iteration = 100   # Which iteration should the decayed rate kick in at?
-    decayed_learning_rate = 3
+    decayed_learning_rate = 0.333
     iterations = 120
     white_noise_magnitude = 1e-3
     fe_model = "conv_autoencoder_2d"             
@@ -53,8 +52,10 @@ class Config():
     #gen_checkpoint = "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"
     log_dir = "log"
     results_dir = "results"
-    start_with_content = False
+    start_with_content = True
     clip = True
+    audio_source_is_default = True
+    note = "<No Note.>"
     
 class StyleTransferError(Exception):
     pass
@@ -111,8 +112,11 @@ class StyleTransfer():
         gen_content_features = layer_features[self.config.content_layer]
         gen_style_features = [layer_features[i] for i, w in self.config.style_layers]
         content_loss = self.content_loss(source_content_features, gen_content_features)
+        tf.summary.scalar("content_loss", self.config.alpha * content_loss)
         style_loss = self.style_loss(source_style_features, gen_style_features)
-        reg_loss = tf.nn.l2_loss(x)
+        tf.summary.scalar("style_loss", self.config.beta * style_loss)
+        reg_loss = tf.nn.l2_loss(x)        
+        tf.summary.scalar("reg_loss", self.config.reg * reg_loss)
         loss = self.config.alpha * content_loss + self.config.beta * style_loss + self.config.reg * reg_loss
         tf.summary.scalar("loss", loss)
         lr = tf.placeholder(tf.float32, name="learning_rate", shape=())
@@ -130,7 +134,7 @@ class StyleTransfer():
             print("i: {} of {}; loss = {}".format(i, self.config.iterations, loss_i))
             writer.add_summary(m, i)
             
-            if i < self.config.decay_iteration:
+            if self.config.clip and i < self.config.decay_iteration:
                 self.fe_session.run(clamp_op)
             
             if i > 10 and i % 10 == 0:
