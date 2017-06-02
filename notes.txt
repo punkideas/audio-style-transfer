@@ -1,0 +1,36 @@
+1) It seems that our inability to do style transfer is an optimization issue.  When we use the output of the first layer, we are easily able to get something that sounds like the original input.  But as the content layer rises in the network, our results get worse.  - I wonder if this could be because of the relus - since they cause things to be set to zero.
+
+2)  It seems that the content and style loss were massively different, making them about the same size seems to help.  In fact, it seems that the content loss should be slighty smaller than the style loss for best results in terms of actually transfering the style.  If the content loss is too big, you just get back the content.  Note that since the content loss depends on the size of the inputs, if the length of the inputs changes then the weights (specifically alpha) will also have to change.
+
+3)  Changing which layers correspond you use for the style loss have massively different magnitudes of their style loss value.  Make sure you weight each layer so that all the losses are on the same scale.
+
+4)  Let the training go on for the full 200 iterations, sometimes after 100 iterations, the optimization suddenly starts working much better
+
+5)  I think higher layers are harder to optimize regardless of style versus content loss.  With the setup below, the style loss is actually optimized better than the content loss.
+
+content_file = "inputs/vctk_corpus/VCTK-Corpus/wav48/val/p300/p300_024.wav"
+style_file = "inputs/vctk_corpus/VCTK-Corpus/wav48/train/p228/p228_044.wav"
+config = Config()
+config.experiment_name = "anthony-st"
+config.fe_checkpoint  = "saved_checkpoints/overfit_on_p228_2d_conv_ae2d_conv_ae/overfit_on_p228_2d_conv_ae2d_conv_ae/hyperspectral_resnet.model-519"
+config.iterations = 200
+config.decay_iteration = 180
+config.optimizer = "adam"
+config.learning_rate = 1.0
+config.decayed_learning_rate = .03333
+config.start_with_content = False
+config.input_samples = 188
+config.content_layer = 1
+config.style_layers = (
+        (0, 1.0),
+        #(1, 1e-4), # 1e-7
+        #(0, 0.5),
+        #(1, 0.5)
+    )
+config.reg = 0.0
+config.alpha = 1.45e-13
+
+
+6)  I think pushing the content layer higher will be the key for good style transfer, because the lower the content layer is, the more the model is punished for deviating from the content audio.
+
+7)  In the blog we based our work off, their "channels" for style transfer are the spectro gram channels whereas ours are not, maybe we should implement something like that (I've tried but its not exactly the same")
