@@ -16,6 +16,7 @@ FEATURE_EXTRACTOR_MODELS = {
 }
 
 OPTIMIZERS = {
+    "rmsprop": tf.train.RMSPropOptimizer,
     "sgd": tf.train.GradientDescentOptimizer,
     "momentum": lambda x: tf.train.MomentumOptimizer(x, 0.85),
     "adam": tf.train.AdamOptimizer,
@@ -36,15 +37,14 @@ class Config():
     style_layers = (                    
         (1, 0.5),
         (2, 0.5)
-    )
-    clip = False     
+    )    
     alpha = 1e-2                        
     beta = 1
     reg = 3e-4                            
     optimizer = "adam"
-    learning_rate = 100.0
+    learning_rate = 10.0
     decay_iteration = 100   # Which iteration should the decayed rate kick in at?
-    decayed_learning_rate = 3
+    decayed_learning_rate = 0.333
     iterations = 120
     white_noise_magnitude = 1e-3
     fe_model = "conv_autoencoder_2d"             
@@ -53,7 +53,11 @@ class Config():
     #gen_checkpoint = "checkpoints/last_checkpoint/hyperspectral_resnet.model-519"
     log_dir = "log"
     results_dir = "results"
-    start_with_content = False
+    start_with_content = True
+    clip = True
+    channels_as_filters = False
+    audio_source_is_default = True
+    note = "<No Note.>"
     
 class StyleTransferError(Exception):
     pass
@@ -74,10 +78,14 @@ class StyleTransfer():
         by training the input to a model so that its content and style are as close
         to the respective content and style of the sources.
         """
+
+        if not os.path.exists(self.config.results_dir):
+            os.makedirs(self.config.results_dir)
+
         content_spectrogram, content_sr = self.read_audio(content_filename)
         style_spectrogram, style_sr = self.read_audio(style_filename)
         source_content_features = self.extract_content_features(content_spectrogram)
-        source_style_features = self.extract_style_features(style_spectrogram)
+        source_style_features = self.extract_style_features(style_spectrogram)            
             
         print("Beginning style transfer")
 
@@ -87,7 +95,33 @@ class StyleTransfer():
             else:
                 x = tf.Variable(self.white_noise(), name="x")
             tf.summary.audio("output", x, content_sr, max_outputs=20)
-        assert_not_nan_op = tf.reduce_any(tf.is_nan(x))
+        assert_not_nan_op = tf.reduce_any(tf.is_nan(x))       
+        
+	time_concatenated_input = np.concatenate((content_spectrogram, style_spectrogram), axis=1)
+	channel_means = time_concatenated_input.mean(axis=1, keepdims=True)
+	channel_std = time_concatenated_input.std(axis=1, keepdims=True)
+
+        print("Min: ", time_concatenated_input.min(), " Max: ", time_concatenated_input.max())	
+        print("Mean: ", time_concatenated_input.mean(), " std: ", time_concatenated_input.std())
+	print("Fraction of exactly zero")
+	print(np.sum(time_concatenated_input == 0) / float(np.prod(time_concatenated_input.shape)))
+	print("Channel means")
+	print(channel_means)
+	print("Channel std")
+	print(channel_std)
+        print("Min std: ", channel_std.min(), " Max std: ", channel_std.max())
+
+	time_dim = content_spectrogram.shape[1]
+	channel_left_clip = np.tile(channel_means - 1.5 * channel_std, (1, time_dim))
+	channel_right_clip = np.tile(channel_means + 1.5 * channel_std, (1, time_dim))
+	
+	channel_left_clip = np.expand_dims(channel_left_clip.T, axis=0)
+	channel_right_clip = np.expand_dims(channel_right_clip.T, axis=0)
+
+	channel_left_clip = time_concatenated_input.min()
+	channel_right_clip = time_concatenated_input.max()
+
+	clamp_op = tf.assign(x, tf.clip_by_value(x, channel_left_clip, channel_right_clip))
 
         with tf.variable_scope('', reuse=True):
             #session, outputs, layer_features, loss = self.get_model(self.config.gen_model,
@@ -96,31 +130,53 @@ class StyleTransfer():
             outputs, layer_features, loss = model(x, training=False)
         gen_content_features = layer_features[self.config.content_layer]
         gen_style_features = [layer_features[i] for i, w in self.config.style_layers]
+
         content_loss = self.content_loss(source_content_features, gen_content_features)
-        style_loss = self.style_loss(source_style_features, gen_style_features)
-        reg_loss = tf.nn.l2_loss(x)
-        loss = self.config.alpha * content_loss + self.config.beta * style_loss + self.config.reg * reg_loss
+        style_loss = self.style_loss(source_style_features, gen_style_features, channels_as_filters = self.config.channels_as_filters)
+        reg_loss = tf.nn.l2_loss(x)        
+
+        content_loss *= self.config.alpha
+        style_loss *= self.config.beta
+        reg_loss *= self.config.reg
+        loss = content_loss + style_loss + reg_loss
+
         tf.summary.scalar("loss", loss)
+        tf.summary.scalar("content_loss", self.config.alpha * content_loss)
+        tf.summary.scalar("style_loss", self.config.beta * style_loss)
+        tf.summary.scalar("reg_loss", self.config.reg * reg_loss)
+
         lr = tf.placeholder(tf.float32, name="learning_rate", shape=())
         optimizer = OPTIMIZERS[self.config.optimizer](lr)
         with tf.control_dependencies([assert_not_nan_op]):
+            grads_and_vars = optimizer.compute_gradients(loss, var_list=[x])
+            max_grad = tf.reduce_max(tf.abs(grads_and_vars[0][0]))
             train_op = optimizer.minimize(loss, var_list=[x])
         merged = tf.summary.merge_all()
 
         self.fe_session.run(tf.global_variables_initializer())
+        print("Before training, content loss: ", self.fe_session.run(content_loss))
+        print("If you start with the content style, shouldn't this be zero?")
+        print("Before training, style loss: ", self.fe_session.run(style_loss))
+
         writer = tf.summary.FileWriter(log_dir or self.config.log_dir, self.fe_session.graph)
         print("Starting first iteration")
         for i in range(self.config.iterations):
             learning_rate = self.config.learning_rate if i < self.config.decay_iteration else self.config.decayed_learning_rate
-            _, m, loss_i = self.fe_session.run((train_op, merged, loss), feed_dict={lr: learning_rate})
-            print("i: {} of {}; loss = {}".format(i, self.config.iterations, loss_i))
+            _, m, loss_i, style_loss_i, content_loss_i, max_grad_i = self.fe_session.run((train_op, merged, loss, style_loss, content_loss, max_grad), feed_dict={lr: learning_rate})
+            print("i: {} of {}; loss = {} (style: {} ; content: {}), max_grad: {}".format(i, self.config.iterations, \
+                     loss_i, style_loss_i, content_loss_i, max_grad_i))
             writer.add_summary(m, i)
-            if i > 10 and i % 10 == 0:
+            
+            if self.config.clip and i < self.config.decay_iteration:
+                self.fe_session.run(clamp_op)
+            
+            if i > 10 and i % 211 == 0:
                 result = x.eval(session=self.fe_session)
                 npfile = os.path.join(self.config.results_dir, 
                         "{}-{}.npy".format(self.config.experiment_name, i))
                 np.save(npfile, result)
-                audiofile = os.path.join("{}-{}.wav".format(self.config.experiment_name, i))
+                audiofile = os.path.join(self.config.results_dir, \
+                                "{}-{}.wav".format(self.config.experiment_name, i))
                 self.write_audio(audiofile, result, content_sr)
         return self.fe_session.run(x)[0, :, :].T, content_sr
             
@@ -142,7 +198,7 @@ class StyleTransfer():
         "Computes the content loss as the l2 norm of the difference between generated and source"
         return tf.nn.l2_loss(generated - source)
 
-    def style_loss(self, source, generated):
+    def style_loss(self, source, generated, channels_as_filters=False):
         """
         Given lists of tensors `source` and `generated`, each of size 
         (batch_size, time_dim, channels_dim, num_filters),
@@ -153,6 +209,24 @@ class StyleTransfer():
         the style layer(s); they match correlations between average filter values over the image.
         See (Gatys et al, 2015, p. 10-11)
         """
+        if channels_as_filters:
+	    loss = 0.0
+	    for g, s, (i, w) in zip(generated, source, self.config.style_layers):
+		batch_size, time_dim, channels_dim, num_filters = s.shape
+		N = channels_dim
+		M = time_dim
+		loss += tf.nn.l2_loss(self.filter_corrs(g, True) - self.filter_corrs(s, True)) * w / (2*N**2*M**2)
+	    return loss
+
+        loss = 0.0
+        for g, s, (i, w) in zip(generated, source, self.config.style_layers):
+            batch_size, time_dim, channels_dim, num_filters = s.shape
+            N = num_filters
+            M = time_dim * channels_dim
+            loss += tf.nn.l2_loss(self.filter_corrs(g) - self.filter_corrs(s)) * w / (2*N**2*M**2)
+        return loss
+
+        """
         batch_size, time_dim, channels_dim, num_filters = source[0].shape
         N = num_filters
         M = time_dim * channels_dim
@@ -160,15 +234,21 @@ class StyleTransfer():
             tf.nn.l2_loss(self.filter_corrs(g) - self.filter_corrs(s)) * w
             for g, s, (i, w) in zip(generated, source, self.config.style_layers)
         ]) / (2*N**2*M**2)
+        """
 
-    def filter_corrs(self, F):
+    def filter_corrs(self, F, channels_as_filters=False):
         """
         Given a tensor F of size (batch_size, time_dim, channels_dim, num_filters),
         returns a filter G of size (batch_size, num_filters, num_filters) where G_ij
         is the (unscaled) correlation between filter i and filter j over the image. 
         """
         batch_size, time_dim, channels_dim, num_filters = [int(d) for d in F.shape]
-        F_unrolled = tf.reshape(F, (batch_size, time_dim * channels_dim, num_filters))
+        if channels_as_filters:
+            # F_unrolled = tf.reshape(F, (batch_size, time_dim, channels_dim * num_filters))  This would be best, but is intractable
+            # F_unrolled = tf.reduce_mean(F, axis=3)
+            F_unrolled = tf.reduce_max(F, axis=3)
+        else:
+            F_unrolled = tf.reshape(F, (batch_size, time_dim * channels_dim, num_filters))
         return tf.matmul(F_unrolled, F_unrolled, transpose_a=True)
 
     # TODO Specify basis for reconstruction. Currently, we just take the autoencoder output. 
