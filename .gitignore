@@ -8,6 +8,7 @@ env/
 *.pyo
 inputs/vctk_corpus/
 saved_checkpoints/
-
-
 poster_and_paper/
+!inputs/test/*.wav
+
+
