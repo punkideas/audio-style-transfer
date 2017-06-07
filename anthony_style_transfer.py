@@ -2,12 +2,16 @@ from style_transfer import Config, StyleTransfer
 from featurization.featurization import save_spectrogram_as_audio
 import numpy as np
 
-content_file = "inputs/vctk_corpus/VCTK-Corpus/wav48/val/p300/p300_024.wav"
-style_file = "inputs/vctk_corpus/VCTK-Corpus/wav48/train/p228/p228_044.wav"
+#content_file = "inputs/vctk_corpus/VCTK-Corpus/wav48/val/p300/p300_024.wav"
+#style_file = "inputs/vctk_corpus/VCTK-Corpus/wav48/train/p228/p228_044.wav"
 #style_file = "inputs/vctk_corpus/VCTK-Corpus/wav48/train/p225/p225_003.wav"
+content_file = "inputs/style_transfer_test_case/content2.wav"
+style_file = "inputs/style_transfer_test_case/style2.wav"
+
 config = Config()
 config.experiment_name = "anthony-st"
-config.fe_checkpoint  = "saved_checkpoints/overfit_on_p228_2d_conv_ae2d_conv_ae/overfit_on_p228_2d_conv_ae2d_conv_ae/hyperspectral_resnet.model-519"
+#config.fe_checkpoint  = "saved_checkpoints/overfit_on_p228_2d_conv_ae2d_conv_ae/overfit_on_p228_2d_conv_ae2d_conv_ae/hyperspectral_resnet.model-519"
+config.fe_checkpoint = "last_checkpoint/hyperspectral_resnet.model-519"
 config.iterations = 200
 config.decay_iteration = 180
 config.optimizer = "adam"
