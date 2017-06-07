@@ -10,5 +10,6 @@ inputs/vctk_corpus/
 saved_checkpoints/
 poster_and_paper/
 !inputs/test/*.wav
+!inputs/style_transfer_test_case/*.wav
 
 
