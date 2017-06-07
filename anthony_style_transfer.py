@@ -5,8 +5,8 @@ import numpy as np
 #content_file = "inputs/vctk_corpus/VCTK-Corpus/wav48/val/p300/p300_024.wav"
 #style_file = "inputs/vctk_corpus/VCTK-Corpus/wav48/train/p228/p228_044.wav"
 #style_file = "inputs/vctk_corpus/VCTK-Corpus/wav48/train/p225/p225_003.wav"
-content_file = "inputs/style_transfer_test_case/content2.wav"
-style_file = "inputs/style_transfer_test_case/style2.wav"
+content_file = "inputs/style_transfer_test_case/content3.wav"
+style_file = "inputs/style_transfer_test_case/style3.wav"
 
 config = Config()
 config.experiment_name = "anthony-st"
